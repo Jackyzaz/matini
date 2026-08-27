@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@source "../../templates/**/*.html";
+@source "../brython/**/*.py";
+
+@plugin "daisyui" {
+  themes: matini --default;
+}
+
+@plugin "daisyui/theme" {
+  name: "matini";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  /* Brand: Indigo */
+  --color-primary: oklch(51% 0.24 275);
+  --color-primary-content: oklch(98% 0.01 275);
+
+  /* Accent: Emerald */
+  --color-secondary: oklch(62% 0.19 155);
+  --color-secondary-content: oklch(98% 0.01 155);
+  --color-accent: oklch(75% 0.18 70);
+  --color-accent-content: oklch(20% 0.01 70);
+
+  /* Neutral & Base */
+  --color-neutral: oklch(25% 0.03 260);
+  --color-neutral-content: oklch(98% 0.002 247);
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(98% 0.008 247);
+  --color-base-300: oklch(94% 0.018 254);
+  --color-base-content: oklch(20% 0.03 260);
+
+  /* Status */
+  --color-info: oklch(60% 0.2 250);
+  --color-info-content: oklch(98% 0 0);
+  --color-success: oklch(64% 0.18 155);
+  --color-success-content: oklch(98% 0 0);
+  --color-warning: oklch(75% 0.18 70);
+  --color-warning-content: oklch(20% 0.01 70);
+  --color-error: oklch(63% 0.24 25);
+  --color-error-content: oklch(98% 0 0);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+}

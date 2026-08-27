@@ -1,0 +1,24 @@
+{
+  "name": "static",
+  "version": "1.0.0",
+  "description": "Matini frontend static assets and tailwind build scripts",
+  "main": "index.js",
+  "scripts": {
+    "tw": "npx @tailwindcss/cli -i ./css/setup.css -o ./css/app.css",
+    "tw:watch": "npx @tailwindcss/cli -i ./css/setup.css -o ./css/app.css --watch",
+    "tw:minify": "npx @tailwindcss/cli -i ./css/setup.css -o ./css/app.css --minify"
+  },
+  "author": "Jk",
+  "license": "ISC",
+  "dependencies": {
+    "@phosphor-icons/web": "^2.1.1",
+    "@tailwindcss/cli": "^4.0.3",
+    "brython": "^3.13.2",
+    "htmx.org": "^1.9.12",
+    "jquery": "^3.7.1",
+    "tailwindcss": "^4.0.3"
+  },
+  "devDependencies": {
+    "daisyui": "^5.0.3"
+  }
+}

@@ -1,0 +1,141 @@
+{% extends "base/base_layout.html" %}
+
+{% block title %}AI Model Registry & Marketplace{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="mb-10 text-center max-w-3xl mx-auto pt-4">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold mb-4 shadow-xs">
+        <i class="ph ph-shield-check-bold text-sm"></i>
+        <span>Multi-Tier AI Safety & Sandboxing Registry</span>
+    </div>
+    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
+        AI Registry & Guardrail Marketplace
+    </h1>
+    <p class="text-slate-600 text-base sm:text-lg leading-relaxed">
+        สำรวจ ทดสอบ และจัดการโมเดล AI ในสภาพแวดล้อมจำลอง (Sandboxed Environment) พร้อมระบบ <strong class="text-slate-900">Per-Model Guardrail</strong> คัดกรองทั้ง Rule-Based Keywords และ LLM-as-a-Judge
+    </p>
+
+    <!-- Key Metrics Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+        <div class="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs text-center card-hover">
+            <div class="text-2xl font-bold text-slate-900">{{ models|length }}</div>
+            <div class="text-xs text-slate-500 font-medium mt-0.5">Registered Models</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs text-center card-hover">
+            <div class="text-2xl font-bold text-emerald-600">100%</div>
+            <div class="text-xs text-slate-500 font-medium mt-0.5">Per-Model Isolation</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs text-center card-hover">
+            <div class="text-2xl font-bold text-indigo-600">2 Layers</div>
+            <div class="text-xs text-slate-500 font-medium mt-0.5">Rule + LLM Judge</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs text-center card-hover">
+            <div class="text-2xl font-bold text-slate-900">&lt; 250ms</div>
+            <div class="text-xs text-slate-500 font-medium mt-0.5">Inspection Latency</div>
+        </div>
+    </div>
+</div>
+
+<!-- Marketplace Header -->
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/80">
+    <div>
+        <h2 class="text-xl font-bold text-slate-900">Available AI Models</h2>
+        <p class="text-xs text-slate-500 mt-0.5">คลิกที่โมเดลเพื่อทดสอบแชทและปรับแต่งนโยบาย Guardrail เฉพาะของโมเดลนั้นๆ</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-slate-500">Filter:</span>
+        <button class="px-3 py-1 rounded-lg text-xs font-medium bg-slate-900 text-white shadow-xs">All Models</button>
+    </div>
+</div>
+
+<!-- AI Model Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {% for m in models %}
+    <div class="group bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs card-hover flex flex-col justify-between">
+        <div>
+            <!-- Card Header: Title & Provider -->
+            <div class="flex items-start justify-between gap-4 mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold shadow-xs
+                        {% if m.avatar_color == 'emerald' %} bg-emerald-50 text-emerald-600 border border-emerald-200/60
+                        {% elif m.avatar_color == 'blue' %} bg-blue-50 text-blue-600 border border-blue-200/60
+                        {% elif m.avatar_color == 'indigo' %} bg-indigo-50 text-indigo-600 border border-indigo-200/60
+                        {% else %} bg-amber-50 text-amber-600 border border-amber-200/60 {% endif %}">
+                        <i class="ph {% if 'code' in m.category|lower %}ph-code-simple{% elif 'finance' in m.category|lower %}ph-chart-line-up{% elif 'security' in m.category|lower %}ph-shield-check{% else %}ph-brain{% endif %}"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                            {{ m.name }}
+                        </h3>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                            <span class="font-medium text-slate-700">{{ m.provider }}</span>
+                            <span>•</span>
+                            <span class="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">{{ m.version }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Category Badge -->
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60">
+                    {{ m.category }}
+                </span>
+            </div>
+
+            <!-- Tagline & Description -->
+            <p class="text-sm font-medium text-slate-800 mb-1.5">{{ m.tagline }}</p>
+            <p class="text-xs text-slate-500 leading-relaxed mb-5 line-clamp-2">
+                {{ m.description }}
+            </p>
+
+            <!-- Guardrail Policy Status Box -->
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70 mb-5">
+                <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <i class="ph ph-shield-check font-bold text-emerald-600"></i>
+                    Active Guardrail Configuration
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <!-- Rule-based status -->
+                    <div class="flex items-center gap-1.5">
+                        {% if m.guardrails.rule_based_enabled %}
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="text-slate-700 font-medium">Rule-Based: <strong class="text-emerald-700">{{ m.guardrails.blacklist_words|length }} words</strong></span>
+                        {% else %}
+                            <span class="w-2 h-2 rounded-full bg-slate-300"></span>
+                            <span class="text-slate-400 font-medium">Rule-Based: Disabled</span>
+                        {% endif %}
+                    </div>
+                    <!-- LLM Judge status -->
+                    <div class="flex items-center gap-1.5">
+                        {% if m.guardrails.llm_judge_enabled %}
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            <span class="text-slate-700 font-medium">AI Judge: <strong class="text-indigo-700">{{ m.guardrails.llm_judge_strictness|capitalize }}</strong></span>
+                        {% else %}
+                            <span class="w-2 h-2 rounded-full bg-slate-300"></span>
+                            <span class="text-slate-400 font-medium">AI Judge: Disabled</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Footer -->
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-3 text-xs text-slate-500">
+                <div class="flex items-center gap-1 text-amber-500 font-bold">
+                    <i class="ph ph-star-fill"></i>
+                    <span>{{ m.rating }}</span>
+                </div>
+                <span>•</span>
+                <div><strong class="text-slate-700">{{ m.calls_count }}</strong> sandboxed calls</div>
+            </div>
+            
+            <a href="/model/{{ m.id }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold transition-all shadow-xs group-hover:shadow-md">
+                <span>Test & Configure</span>
+                <i class="ph ph-arrow-right font-bold"></i>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

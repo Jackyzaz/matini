@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd matini/web/static
+npm "$@"

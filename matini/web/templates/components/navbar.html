@@ -1,0 +1,41 @@
+<header class="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <!-- Brand Logo -->
+        <div class="flex items-center gap-3">
+            <a href="/" class="flex items-center gap-2.5 group">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-indigo-400 flex items-center justify-center text-white shadow-sm shadow-indigo-200 group-hover:scale-105 transition-transform">
+                    <i class="ph ph-shield-check text-2xl font-bold"></i>
+                </div>
+                <div>
+                    <span class="text-lg font-bold tracking-tight text-slate-900 font-heading">Matini<span class="text-indigo-600">.ai</span></span>
+                    <span class="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded ml-2">Registry & Sandbox</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Center Navigation -->
+        <nav class="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 text-xs font-medium">
+            <a href="/" class="px-3.5 py-1.5 rounded-lg bg-white text-slate-900 shadow-xs flex items-center gap-1.5">
+                <i class="ph ph-squares-four text-sm text-indigo-600"></i> AI Marketplace
+            </a>
+            <a href="http://127.0.0.1:8000/docs" target="_blank" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5">
+                <i class="ph ph-cube text-sm"></i> Backend API
+            </a>
+        </nav>
+
+        <!-- Right System Indicators -->
+        <div class="flex items-center gap-3">
+            <!-- Sandbox Status Pill -->
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100/90 border border-slate-200/80 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 guardrail-active-dot"></span>
+                <span class="font-medium text-slate-700">Guardrails Engine: <strong class="text-emerald-700">Online</strong></span>
+            </div>
+
+            <!-- Brython Pill -->
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-semibold">
+                <i class="ph ph-file-py text-sm"></i>
+                <span>Brython Client</span>
+            </div>
+        </div>
+    </div>
+</header>

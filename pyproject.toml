@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "matini"
+version = "0.1.0"
+description = "AI Registry Marketplace with Guardrails Demo"
+authors = ["Jk <jk@example.com>"]
+readme = "README.md"
+packages = [{include = "matini"}]
+
+[tool.poetry.dependencies]
+python = "^3.12 || ^3.13"
+fastapi = "^0.115.0"
+uvicorn = {version = "^0.32.0", extras = ["standard"]}
+pydantic = "^2.9.0"
+pydantic-settings = "^2.6.0"
+flask = "^3.0.0"
+requests = "^2.32.0"
+loguru = "^0.7.2"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+livereload = "^2.7.0"
+httpx = "^0.28.0"
+pytest = "^8.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+matini-web = "matini.cmd.web:main"
+matini-api = "matini.cmd.api:main"

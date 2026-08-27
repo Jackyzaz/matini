@@ -1,0 +1,3 @@
+#!/bin/bash
+export PYTHONPATH=.
+poetry run python -m matini.cmd.api
