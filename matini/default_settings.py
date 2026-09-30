@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-APP_TITLE = "Matini AI Registry"
+APP_TITLE = "Matini"
 API_HOST = os.getenv("API_HOST", "127.0.0.1")
 API_PORT = int(os.getenv("API_PORT", "8000"))
 API_URL = os.getenv("API_URL", f"http://{API_HOST}:{API_PORT}")

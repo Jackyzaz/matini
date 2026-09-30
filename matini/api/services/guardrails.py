@@ -1,10 +1,15 @@
+"""Guardrail checks (rule-based + heuristic "LLM judge").
+
+DISABLED: nothing in the API wires this module in any more (chat now goes straight
+to the selected Ollama model). It is kept in the codebase so it can be re-enabled
+later by calling `run_guardrails` from the chat router before forwarding a prompt.
+Note `check_llm_judge` is still a keyword/regex heuristic, not a real LLM call.
+"""
 import time
 import re
 import random
-from typing import Tuple, List, Optional
-from matini.api.schemas.chat import GuardrailCheckResult, ChatResponse
-from matini.api.schemas.models import GuardrailConfig, AIModel
-from matini.api.services.registry import get_model_by_id
+from typing import List, Tuple
+from matini.api.schemas.guardrails import GuardrailCheckResult, GuardrailConfig
 
 INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?(previous|prior|above)?\s*instructions",
@@ -108,90 +113,12 @@ def check_llm_judge(prompt: str, config: GuardrailConfig) -> GuardrailCheckResul
         detected_triggers=[],
     )
 
-def generate_mock_response(model: AIModel, prompt: str) -> str:
-    """Generate intelligent mock responses tailored to the model persona."""
-    if "code" in model.category.lower() or "deepseek" in model.id:
-        return f"""// Verified safe execution by {model.name}
-def execute_task():
-    # Prompt: {prompt[:40]}...
-    print("Process executed safely inside sandbox container.")
-    return {{"status": "success", "engine": "{model.id}", "version": "{model.version}"}}"""
-        
-    elif "finance" in model.category.lower():
-        return f"""[FinGuard Advisory Response]
-Based on current financial analysis standards regarding "{prompt[:50]}":
-1. Market diversification and risk tolerance must always be assessed.
-2. Past performance is not indicative of future returns.
-(Generated compliant report via {model.name})"""
-
-    elif "security" in model.category.lower() or "sentinel" in model.id:
-        return f"""[Claude Sentinel Policy Report]
-Your query has been analyzed against the internal alignment guidelines:
-- Prompt Intent: Compliant and verified
-- Sandbox Enclosure: Active
-- Safe output generated for: "{prompt}"."""
-
-    else:
-        return f"""Hello! I am {model.name}.
-I've processed your prompt: "{prompt}".
-All guardrail verification gates passed smoothly. How else can I assist you with your project today?"""
-
-def process_chat(model_id: str, prompt: str) -> ChatResponse:
-    total_start = time.time()
-    model = get_model_by_id(model_id)
-    
-    if not model:
-        return ChatResponse(
-            model_id=model_id,
-            prompt=prompt,
-            response=None,
-            status="error",
-            guardrail_results=[],
-            total_latency_ms=0.0,
-        )
-
-    guardrail_results: List[GuardrailCheckResult] = []
-
-    # Step 1: Rule-based Guardrail Check
-    rule_res = check_rule_based(prompt, model.guardrails)
-    guardrail_results.append(rule_res)
-    
-    if not rule_res.passed:
-        total_latency = round((time.time() - total_start) * 1000, 2)
-        return ChatResponse(
-            model_id=model.id,
-            prompt=prompt,
-            response=None,
-            status="blocked",
-            guardrail_results=guardrail_results,
-            total_latency_ms=total_latency,
-        )
-
-    # Step 2: LLM-as-a-Judge Guardrail Check
-    judge_res = check_llm_judge(prompt, model.guardrails)
-    guardrail_results.append(judge_res)
-    
-    if not judge_res.passed:
-        total_latency = round((time.time() - total_start) * 1000, 2)
-        return ChatResponse(
-            model_id=model.id,
-            prompt=prompt,
-            response=None,
-            status="blocked",
-            guardrail_results=guardrail_results,
-            total_latency_ms=total_latency,
-        )
-
-    # Step 3: Model Response Generation
-    mock_reply = generate_mock_response(model, prompt)
-    model.calls_count += 1
-    total_latency = round((time.time() - total_start) * 1000, 2)
-
-    return ChatResponse(
-        model_id=model.id,
-        prompt=prompt,
-        response=mock_reply,
-        status="allowed",
-        guardrail_results=guardrail_results,
-        total_latency_ms=total_latency,
-    )
+def run_guardrails(prompt: str, config: GuardrailConfig) -> Tuple[bool, List[GuardrailCheckResult]]:
+    """Run both layers in order. Returns (allowed, per-layer results); stops at the first block."""
+    results: List[GuardrailCheckResult] = []
+    for check in (check_rule_based, check_llm_judge):
+        res = check(prompt, config)
+        results.append(res)
+        if not res.passed:
+            return False, results
+    return True, results

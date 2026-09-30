@@ -1,10 +1,10 @@
 from fastapi import APIRouter
-from .models import router as models_router
+from .llms import router as llms_router
 from .chat import router as chat_router
 from .assessment import router as assessment_router
 
 api_router = APIRouter()
-api_router.include_router(models_router)
+api_router.include_router(llms_router)
 api_router.include_router(chat_router)
 api_router.include_router(assessment_router)
 

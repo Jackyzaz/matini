@@ -1,56 +1,45 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50">
+<html lang="th" class="h-full bg-slate-50">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} | {{ app_title }}</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    
+
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
+
     <!-- Tailwind and Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
-    
+
+    <!-- Markdown rendering for assistant replies -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="{{ url_for('static', filename='js/matini.js') }}"></script>
+
     <!-- Brython Core Runtime -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.13.0/brython.min.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.13.0/brython_stdlib.js"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
-<body class="h-full flex flex-col bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 bg-grid-slate" onload="brython(1)">
-    
-    <!-- Navigation Bar -->
-    {% include "components/navbar.html" %}
+<body class="h-full text-slate-900 selection:bg-indigo-100 selection:text-indigo-900"
+      data-api-url="{{ api_url }}"
+      onload="brython({debug: 1, pythonpath: ['{{ url_for('static', filename='brython') }}']})">
 
-    <!-- Main Content -->
-    <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
-    </main>
-
-    <!-- Footer -->
-    <footer class="border-t border-slate-200/80 bg-white/70 backdrop-blur-sm py-6 mt-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-            <div class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 guardrail-active-dot"></span>
-                <span class="font-medium text-slate-700">Matini AI Sandboxing & Guardrail Engine</span>
-                <span class="text-slate-300">•</span>
-                <span>FastAPI + Flask + Brython Monorepo</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <a href="http://127.0.0.1:8000/docs" target="_blank" class="hover:text-indigo-600 font-medium transition-colors flex items-center gap-1">
-                    <i class="ph ph-brackets-curly"></i> FastAPI Swagger
-                </a>
-                <span class="text-slate-300">•</span>
-                <span class="text-slate-400">Poetry Managed Ecosystem</span>
-            </div>
-        </div>
-    </footer>
+    {% block shell %}
+    <div class="min-h-full flex flex-col">
+        {% include "components/navbar.html" %}
+        <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% endblock %}
 
     <!-- Global Toast Container -->
     <div id="toast_container" class="fixed bottom-6 right-6 z-50 flex flex-col items-end max-w-sm pointer-events-none"></div>

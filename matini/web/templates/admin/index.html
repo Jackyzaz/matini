@@ -1,0 +1,68 @@
+{% extends "base/base_layout.html" %}
+
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-900">จัดการ LLM</h1>
+    <p class="text-xs text-slate-500 mt-1">เพิ่ม/ปิด/ลบ Local LLM (Ollama) ที่จะปรากฏในหน้าแชทและหน้าประเมิน</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- LLM list -->
+    <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead class="bg-slate-50 text-slate-500 text-left">
+                    <tr>
+                        <th class="px-4 py-3 font-semibold">ชื่อ</th>
+                        <th class="px-4 py-3 font-semibold">Model tag</th>
+                        <th class="px-4 py-3 font-semibold">Base URL</th>
+                        <th class="px-4 py-3 font-semibold">สถานะ</th>
+                        <th class="px-4 py-3 font-semibold text-right">การทำงาน</th>
+                    </tr>
+                </thead>
+                <tbody id="llm_table_body" class="divide-y divide-slate-100">
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">กำลังโหลด…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add form -->
+    <form id="llm_form" class="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4 self-start">
+        <h3 class="text-base font-bold text-slate-900">เพิ่ม LLM</h3>
+
+        <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="f_name">ชื่อที่แสดง</label>
+            <input id="f_name" required placeholder="เช่น Llama 3.1 8B"
+                class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="f_model">Ollama model tag</label>
+            <input id="f_model" required placeholder="เช่น llama3.1 หรือ qwen2.5:7b"
+                class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="f_base_url">Base URL <span class="font-normal text-slate-400">(เว้นว่าง = ค่าจาก .env)</span></label>
+            <input id="f_base_url" placeholder="http://127.0.0.1:11434"
+                class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="f_description">คำอธิบาย <span class="font-normal text-slate-400">(ใช้เป็นบริบทของผู้ตัดสินในการประเมิน)</span></label>
+            <textarea id="f_description" rows="3"
+                class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"></textarea>
+        </div>
+
+        <button type="submit" id="f_submit"
+            class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5">
+            <i class="ph ph-plus"></i> เพิ่ม LLM
+        </button>
+        <p class="text-[10px] text-slate-400">หน้านี้ยังไม่มีระบบยืนยันตัวตน — ใช้ในเครือข่ายที่เชื่อถือได้เท่านั้น</p>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/python" src="{{ url_for('static', filename='brython/admin.py') }}"></script>
+{% endblock %}

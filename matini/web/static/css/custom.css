@@ -86,3 +86,27 @@ code, pre {
 .guardrail-active-dot {
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Rendered markdown inside assistant messages */
+.md-content { line-height: 1.7; font-size: 0.9rem; overflow-wrap: anywhere; }
+.md-content > :first-child { margin-top: 0; }
+.md-content > :last-child { margin-bottom: 0; }
+.md-content p { margin: 0.6em 0; }
+.md-content ul, .md-content ol { margin: 0.6em 0; padding-left: 1.4em; }
+.md-content ul { list-style: disc; }
+.md-content ol { list-style: decimal; }
+.md-content h1, .md-content h2, .md-content h3 { font-weight: 700; margin: 1em 0 0.4em; }
+.md-content h1 { font-size: 1.25rem; }
+.md-content h2 { font-size: 1.1rem; }
+.md-content h3 { font-size: 1rem; }
+.md-content a { color: #4f46e5; text-decoration: underline; }
+.md-content code { background: #f1f5f9; padding: 0.1em 0.35em; border-radius: 0.3rem; font-size: 0.85em; }
+.md-content pre { background: #0f172a; color: #e2e8f0; padding: 0.9em 1em; border-radius: 0.75rem; overflow-x: auto; margin: 0.8em 0; }
+.md-content pre code { background: transparent; padding: 0; color: inherit; }
+.md-content blockquote { border-left: 3px solid #cbd5e1; padding-left: 0.9em; color: #475569; margin: 0.8em 0; }
+.md-content table { border-collapse: collapse; margin: 0.8em 0; }
+.md-content th, .md-content td { border: 1px solid #e2e8f0; padding: 0.35em 0.7em; }
+
+/* Blinking caret shown while a reply is streaming */
+.streaming-caret::after { content: "▍"; animation: caret-blink 1s steps(2) infinite; color: #6366f1; }
+@keyframes caret-blink { 50% { opacity: 0; } }

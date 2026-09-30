@@ -1,50 +1,47 @@
-# Matini - AI Model Registry & Multi-Tier Guardrails Sandbox
+# Matini — Local LLM Chat & NIST AI RMF Assessment
 
-ระบบจำลอง **AI Registry & Marketplace** พร้อมระบบตรวจสอบความปลอดภัย **Guardrail Verification Engine (Per-Model)** พัฒนาด้วยสถาปัตยกรรม Monorepo ตามแบบฉบับ `sahassanai` และ `sindhu` โดยใช้ **Poetry + FastAPI + Flask + Brython (Python in Browser)** ในรูปแบบ **White Theme (Clean & Modern)**
-
----
-
-## 🌟 Key Features
-
-1. **AI Model Marketplace (Registry):**
-   - แสดงรายการโมเดล AI (Security, Coding, Finance, General) พร้อมสถานะ Guardrails และ Metrics
-2. **Per-Model Guardrail Customization:**
-   - **Layer 1: Rule-Based Keyword Filter** ตรวจจับคำต้องห้าม (Blacklist) อย่างรวดเร็ว (Latency < 2ms) เพิ่ม/ลบคำต้องห้ามได้อิสระ
-   - **Layer 2: LLM-as-a-Judge Guardrail** จำลอง AI วิเคราะห์เจตนา (Prompt Injection / Safety Alignment) พร้อมเลือกระดับความเข้มงวด (Low / Medium / High)
-3. **Sandboxed Interactive Console (Brython):**
-   - เขียน Client Logic ด้วย **Python** 100% ผ่าน Brython (`model_chat.py`)
-   - ระบบ **Real-Time Guardrail Inspection Log** แสดงผลการตรวจสอบทีละ Layer แบบสดๆ
+แอปแชทกับ **Local LLM (Ollama)** หน้าตาแบบแอปแชท AI ทั่วไป พร้อมระบบ **ประเมินจริยธรรม AI ตามกรอบ NIST AI RMF**
+สถาปัตยกรรม Monorepo: **Poetry + FastAPI + Beanie (MongoDB) + Flask + Brython (Python in Browser)**
 
 ---
 
-## 🚀 How to Run
+## Features
 
-### 1. ติดตั้ง Dependencies
+1. **Chat** (หน้าแรก `/`) — คุยหลายรอบ, คำตอบ stream ทีละ token, เลือกโมเดลได้จาก dropdown, ประวัติเก็บใน MongoDB
+2. **Admin** (`/admin/`) — เพิ่ม/เปิด-ปิด/ลบ/ทดสอบ Local LLM (ตอนนี้รองรับ Ollama; Base URL ค่าเริ่มต้นมาจาก `.env`)
+3. **NIST AI RMF Assessment** (`/assessment/<llm_id>`) — ประเมินโมเดล 12 เกณฑ์ด้วย LLM-as-judge รันเบื้องหลังพร้อม **progress bar**
+
+> ระบบ Guardrail ถูกปิดไว้ (ไม่ได้ต่อเข้ากับแชท) แต่ยังเก็บโค้ดไว้ที่ `matini/api/services/guardrails.py`
+
+---
+
+## How to Run
+
+ต้องมี **Python 3.12 หรือ 3.13** (Beanie ยังไม่รองรับ 3.14), **MongoDB** และ **Ollama**
+
 ```bash
 poetry install
+cp .env.example .env          # แล้วแก้ MONGODB_URI / OLLAMA_BASE_URL / OLLAMA_JUDGE_MODEL
+
+docker run -d --name matini-mongo -p 27017:27017 mongo:7   # ถ้ายังไม่มี MongoDB
+
+./scripts/run-api             # FastAPI  → http://127.0.0.1:8000  (Swagger: /docs)
+./scripts/run-web             # Flask    → http://localhost:8080
 ```
 
-### 2. รัน FastAPI Backend (Port 8000)
-```bash
-./scripts/run-api
-# หรือ
-poetry run matini-api
-```
-- Swagger API Docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+จากนั้นเปิด `http://localhost:8080/admin/` เพื่อเพิ่ม LLM ตัวแรก (เช่น model tag `llama3.2:3b`) แล้วกลับไปแชทที่หน้าแรก
 
-### 3. รัน Flask Web Frontend (Port 8080)
-```bash
-./scripts/run-web
-# หรือ
-poetry run matini-web
-```
-- เว็บไซต์หน้าบ้าน: [http://localhost:8080](http://localhost:8080)
+รายละเอียดการตั้งค่า Ollama (รวมกรณีรันคนละเครื่อง) และการใช้หน้าประเมิน: [matini/docs/nist-rmf-poc-guide.md](matini/docs/nist-rmf-poc-guide.md)
+
+หลังแก้ template ให้ build Tailwind ใหม่: `./scripts/npm run tw`
 
 ---
 
-## 🧪 Testing
+## Testing
 
-รัน Automated Test Suite ทั้ง Backend และ Frontend:
 ```bash
 poetry run pytest
 ```
+
+ชุดทดสอบฝั่ง API ใช้ MongoDB จริงที่ database `matinidb_test` (ตั้งค่าได้ด้วย `TEST_MONGODB_URI`; ชื่อ database ต้องลงท้าย `_test`)
+และจะ skip อัตโนมัติถ้าเชื่อมต่อ MongoDB ไม่ได้ — การเรียก Ollama ในเทสต์ถูก mock ไว้ทั้งหมด

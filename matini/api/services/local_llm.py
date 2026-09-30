@@ -15,8 +15,9 @@ prove the pipeline works end-to-end, but for the actual study, prefer a
 different (ideally stronger/independently-validated) model as the judge.
 """
 import json
-from typing import Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
+import httpx
 import requests
 
 from matini.api.core.config import settings
@@ -109,3 +110,43 @@ def judge(
             raise OllamaUnavailableError(
                 f"ผลลัพธ์จาก judge model ('{model}') ไม่ใช่ JSON ที่แปลงได้: {raw2!r}"
             ) from exc
+
+
+async def chat_stream(
+    model: str,
+    messages: List[Dict[str, str]],
+    *,
+    base_url: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> AsyncIterator[str]:
+    """Stream a chat completion from Ollama, yielding the text of each chunk as it arrives."""
+    url = f"{(base_url or settings.ollama_base_url).rstrip('/')}/api/chat"
+    payload = {"model": model, "messages": messages, "stream": True}
+    # Timeout applies per read (i.e. between chunks), not to the whole response.
+    client_timeout = httpx.Timeout(timeout or settings.ollama_timeout_s, connect=10.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=client_timeout) as client:
+            async with client.stream("POST", url, json=payload) as resp:
+                if resp.status_code >= 400:
+                    body = (await resp.aread()).decode("utf-8", "replace")[:300]
+                    raise OllamaUnavailableError(f"Ollama ตอบกลับ HTTP {resp.status_code} จาก {url}: {body}")
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        raise OllamaUnavailableError(f"Ollama ตอบกลับที่ {url} ไม่ใช่ JSON: {line[:300]!r}") from exc
+                    if data.get("error"):
+                        raise OllamaUnavailableError(f"Ollama error: {data['error']}")
+                    chunk = (data.get("message") or {}).get("content")
+                    if chunk:
+                        yield chunk
+                    if data.get("done"):
+                        break
+    except httpx.HTTPError as exc:
+        raise OllamaUnavailableError(
+            f"เชื่อมต่อ Ollama ไม่สำเร็จที่ {url} ({exc.__class__.__name__}: {exc}). "
+            f"ตรวจสอบว่า Ollama กำลังรันอยู่ รัน `ollama pull {model}` แล้ว และ base URL ถูกต้อง"
+        ) from exc

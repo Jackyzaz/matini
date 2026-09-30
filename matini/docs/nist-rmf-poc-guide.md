@@ -3,7 +3,7 @@
 เอกสารนี้อธิบายวิธีตั้งค่าและใช้งานฟีเจอร์ **NIST AI RMF Ethical Assessment (POC)**
 ที่เพิ่มเข้าไปในโปรเจกต์ `matini` โดยใช้ local LLM ผ่าน **Ollama** เป็นทั้ง
 
-1. **ผู้ถูกประเมิน (subject)** — โมเดลใน registry ชื่อ `ollama-local-poc`
+1. **ผู้ถูกประเมิน (subject)** — LLM ที่เพิ่มไว้ในหน้า **Admin** (`/admin/`)
 2. **ผู้ประเมิน (LLM-as-judge)** — ให้คะแนนแต่ละเกณฑ์ตามกรอบ NIST AI RMF 1.0
 
 เนื่องจากเครื่องนี้ทรัพยากรไม่พอสำหรับรัน local LLM คู่มือนี้เขียนแยกเป็น
@@ -12,26 +12,22 @@
 
 ---
 
-## 0. สรุปไฟล์ที่เพิ่ม/แก้ไข
+## 0. ภาพรวมสถาปัตยกรรม
 
-| ไฟล์ | สถานะ | หน้าที่ |
+| ส่วน | ไฟล์ | หน้าที่ |
 |---|---|---|
-| `api/core/config.py` | แก้ไข | เพิ่ม `OLLAMA_BASE_URL`, `OLLAMA_JUDGE_MODEL`, `OLLAMA_SUBJECT_MODEL`, `OLLAMA_TIMEOUT_S` |
-| `api/schemas/models.py` | แก้ไข | เพิ่ม `is_local`, `ollama_model_name` ใน `AIModel` |
-| `api/schemas/assessment.py` | ใหม่ | schema ของเกณฑ์ประเมิน/รายงานผล |
-| `api/services/nist_rmf.py` | ใหม่ | ชุดเกณฑ์ประเมิน 12 ข้อ (อ้างอิง NIST AI RMF แบบย่อ) |
-| `api/services/local_llm.py` | ใหม่ | client เรียก Ollama (`/api/chat`) |
-| `api/services/assessment.py` | ใหม่ | engine รันการประเมิน + เก็บผลใน memory |
-| `api/services/registry.py` | แก้ไข | เพิ่มโมเดล `ollama-local-poc` |
-| `api/routers/assessment.py` | ใหม่ | endpoint `/api/assessment/...` |
-| `api/routers/__init__.py` | แก้ไข | ลงทะเบียน router ใหม่ |
-| `web/views/assessment.py` | ใหม่ | หน้าเว็บฟอร์มประเมิน + ผลลัพธ์ |
-| `web/views/__init__.py`, `web/__init__.py` | แก้ไข | ลงทะเบียน blueprint ใหม่ |
-| `web/templates/assessment/detail.html` | ใหม่ | หน้าแบบฟอร์ม + แสดงผลประเมิน |
-| `web/templates/models/detail.html` | แก้ไข | เพิ่มปุ่มลิงก์ไปหน้าประเมิน |
+| Config | `api/core/config.py` | `MONGODB_URI`, `OLLAMA_BASE_URL`, `OLLAMA_JUDGE_MODEL`, `OLLAMA_TIMEOUT_S` |
+| Database | `models/` (Beanie) | collection `llms`, `conversations`, `assessments` |
+| Schemas | `schemas/` | schema ของ LLM, บทสนทนา, เกณฑ์ประเมิน/รายงาน/สถานะงาน |
+| LLM client | `api/services/local_llm.py` | เรียก Ollama `/api/chat` (แบบ sync สำหรับประเมิน, แบบ async stream สำหรับแชท) |
+| Assessment engine | `api/services/nist_rmf.py`, `api/services/assessment.py` | เกณฑ์ 12 ข้อ + งานประเมินเบื้องหลังพร้อมรายงานความคืบหน้า |
+| Routers | `api/routers/{llms,chat,assessment}.py` | `/api/llms`, `/api/conversations`, `/api/assessment` |
+| Web | `web/views/{chat,admin,assessment}.py` + `web/templates/` + `web/static/brython/` | หน้าแชท (`/`), หน้า Admin (`/admin/`), หน้าประเมิน (`/assessment/<llm_id>`) |
 
-ทั้งหมดเก็บผลแบบ **in-memory** (เหมือน model registry เดิม) — รีสตาร์ท API แล้วประวัติหาย
-เหมาะสำหรับพิสูจน์แนวคิดเท่านั้น ก่อนเก็บข้อมูลจริงสำหรับงานวิจัยควรย้ายไปเก็บใน DB จริง
+ผลการประเมินและประวัติแชทเก็บใน **MongoDB** ส่วนสถานะของงานประเมินที่กำลังรันอยู่ (สำหรับ progress bar)
+เก็บใน memory ของ API process — ถ้ารีสตาร์ท API ระหว่างรัน งานนั้นจะหายและต้องกดรันใหม่
+
+> ระบบ Guardrail (`api/services/guardrails.py`) ถูกปิดไว้ — ไม่ได้ต่อเข้ากับแชทแล้ว แต่ยังเก็บโค้ดไว้ใช้ภายหลัง
 
 ---
 
@@ -72,30 +68,30 @@
 
 ## 2. เครื่อง A — ตั้งค่า `matini` ให้ชี้ไปที่เครื่อง B
 
-หาไฟล์ `.env` ของโปรเจกต์ (อยู่ที่ root ของ repo, ระดับเดียวกับ `pyproject.toml` —
-จุดที่คุณรันคำสั่ง `python -m matini.cmd.api` อยู่) ถ้ายังไม่มีให้สร้างใหม่ แล้วเพิ่ม/แก้ไข:
+หาไฟล์ `.env` ของโปรเจกต์ (อยู่ที่ root ของ repo, ระดับเดียวกับ `pyproject.toml`) ถ้ายังไม่มีให้คัดลอกจาก
+`.env.example` แล้วเพิ่ม/แก้ไข:
 
 ```dotenv
-# ชี้ไปยัง Ollama บนเครื่อง B
+# MongoDB (ชื่อ database อยู่ท้าย URI)
+MONGODB_URI="mongodb://localhost:27017/matinidb"
+
+# Ollama บนเครื่อง B — ใช้เป็นค่า Base URL เริ่มต้นเมื่อเพิ่ม LLM ในหน้า Admin แล้วเว้นช่องนี้ว่าง
+# และใช้เป็น endpoint ของ "ผู้ตัดสิน" ในการประเมิน
 OLLAMA_BASE_URL=http://192.168.1.50:11434
 
 # โมเดลที่ใช้เป็น "ผู้ตัดสิน" (ให้คะแนนแต่ละเกณฑ์)
 OLLAMA_JUDGE_MODEL=llama3.2:3b
-
-# โมเดลเริ่มต้นที่ใช้เป็น "ผู้ถูกประเมิน" เมื่อไม่ได้ระบุ ollama_model_name ใน registry
-OLLAMA_SUBJECT_MODEL=llama3.2:3b
 
 # local LLM บนเครื่องที่ไม่แรงมากอาจตอบช้า ปรับเพิ่มได้ถ้า timeout บ่อย
 OLLAMA_TIMEOUT_S=120
 ```
 
 > ค่าเริ่มต้นในโค้ด (`api/core/config.py`) ชี้ที่ `http://127.0.0.1:11434` — ถ้าไม่ตั้งค่า `.env`
-> ระบบจะพยายามต่อ Ollama บนเครื่อง A เอง (ซึ่งตามที่แจ้งไว้ ยังไม่ต้องรันที่นี่)
+> ระบบจะพยายามต่อ Ollama บนเครื่อง A เอง
 
-ตรวจสอบว่า `requests` อยู่ใน dependencies ของโปรเจกต์ (ใช้อยู่แล้วฝั่ง `web/views/*`,
-โค้ดใหม่ฝั่ง `api/services/local_llm.py` ก็ใช้ตัวเดียวกัน) ถ้ายังไม่มีใน `pyproject.toml`:
+ต้องมี MongoDB รันอยู่ (Beanie ต้องใช้ Python < 3.14 — โปรเจกต์กำหนด `^3.12 || ^3.13`) เช่นรันชั่วคราวด้วย Docker:
 ```bash
-poetry add requests
+docker run -d --name matini-mongo -p 27017:27017 mongo:7
 ```
 
 ---
@@ -118,16 +114,20 @@ npm run tw:watch
 ## 4. รันระบบ
 
 ```bash
-# terminal 1: FastAPI backend
+# terminal 1: FastAPI backend (ต้องมี MongoDB รันอยู่)
 poetry run python -m matini.cmd.api
 
 # terminal 2: Flask frontend
 poetry run python -m matini.cmd.web
 ```
-(หรือ `python -m matini.cmd.api` / `python -m matini.cmd.web` ตรง ๆ ถ้าไม่ได้ใช้ poetry)
+(หรือ `./scripts/run-api` / `./scripts/run-web`)
 
-เปิดเบราว์เซอร์ไปที่ `http://127.0.0.1:8080` → คลิกโมเดล **"Local LLM (Ollama POC)"** →
-คลิกปุ่ม **"NIST AI RMF Assessment"** มุมขวาบน
+เปิดเบราว์เซอร์ไปที่ `http://127.0.0.1:8080`:
+
+1. ไปหน้า **Admin** (`/admin/`) → เพิ่ม LLM (ชื่อ, Ollama model tag เช่น `llama3.2:3b`, Base URL เว้นว่างได้) →
+   กดปุ่มทดสอบการเชื่อมต่อ
+2. กลับหน้าแรกเพื่อแชท — เลือกโมเดลจาก dropdown ใต้ช่องพิมพ์
+3. หน้าประเมิน: กดลิงก์ **"ประเมินโมเดลนี้ (NIST AI RMF)"** ที่แถบด้านซ้ายของหน้าแชท หรือไอคอนในตาราง Admin
 
 ---
 
@@ -135,25 +135,35 @@ poetry run python -m matini.cmd.web
 
 1. (ไม่บังคับ) กรอก **บริบทของระบบ** — อธิบายว่ากำลังประเมินอะไร ใช้ทำอะไร
 2. ติ๊ก **"ทดสอบพฤติกรรมจริงของโมเดลอัตโนมัติสำหรับเกณฑ์ในหมวด MEASURE"** ไว้ (ค่าเริ่มต้นติ๊กอยู่แล้ว)
-   ระบบจะยิง probe prompt 4 ข้อ (bias / privacy / explainability / safety) ไปที่โมเดลจริงผ่าน Ollama
+   ระบบจะยิง probe prompt 4 ข้อ (bias / privacy / explainability / safety) ไปที่ LLM ที่เลือกผ่าน Ollama
 3. (ไม่บังคับ) กรอกหลักฐาน/บันทึกของคุณเองในแต่ละเกณฑ์ (12 ข้อ แบ่งตาม GOVERN/MAP/MEASURE/MANAGE)
    — ยิ่งกรอกเยอะ ผลตัดสินของ LLM judge ยิ่งมีหลักฐานอ้างอิงมากขึ้น ไม่ใช่เดาจากชื่อโมเดลอย่างเดียว
-4. กด **"Run NIST AI RMF Assessment"** — รอบแรกอาจใช้เวลาหลายนาทีถ้าเครื่อง B ไม่แรงมาก
-   (12 เกณฑ์ × เรียก Ollama 1-2 ครั้งต่อเกณฑ์)
-5. ผลลัพธ์แสดงทางซ้าย: คะแนนเฉลี่ยต่อฟังก์ชัน (GOVERN/MAP/MEASURE/MANAGE), overall risk level,
-   และรายละเอียดต่อเกณฑ์ (คะแนน, risk level, เหตุผลจาก judge, transcript ของ probe ถ้ามี)
-6. รันซ้ำได้เรื่อย ๆ — ระบบเก็บประวัติทุกรอบไว้ใน memory (`GET /api/assessment/{model_id}/history`)
+4. กด **"Run NIST AI RMF Assessment"** — งานรันเบื้องหลัง และมี **progress bar** ด้านบนแสดงขั้นที่ทำอยู่
+   (`ขั้นที่ทำแล้ว/ทั้งหมด`, เปอร์เซ็นต์, ชื่อเกณฑ์ที่กำลังทดสอบ/ให้คะแนน) รอบแรกอาจใช้เวลาหลายนาทีถ้าเครื่อง B
+   ไม่แรงมาก ปิดหน้าแล้วกลับมาเปิดใหม่ progress bar จะกลับมาแสดงต่อ
+5. เมื่อเสร็จ หน้าจะโหลดใหม่และแสดงผลทางซ้าย: คะแนนเฉลี่ยต่อฟังก์ชัน (GOVERN/MAP/MEASURE/MANAGE),
+   overall risk level, และรายละเอียดต่อเกณฑ์ (คะแนน, risk level, เหตุผลจาก judge, transcript ของ probe ถ้ามี)
+6. รันซ้ำได้เรื่อย ๆ — ระบบเก็บประวัติทุกรอบไว้ใน MongoDB (`GET /api/assessment/{llm_id}/history`)
 
 ---
 
-## 6. API endpoints ใหม่ (ดูที่ `http://127.0.0.1:8000/docs` ได้ด้วย)
+## 6. API endpoints (ดูที่ `http://127.0.0.1:8000/docs` ได้ด้วย)
 
 | Method | Path | หน้าที่ |
 |---|---|---|
+| GET | `/api/llms` | รายการ LLM ที่เปิดใช้งาน (`?status=all` รวมที่ปิดอยู่) |
+| POST | `/api/llms/create` | เพิ่ม LLM |
+| PUT | `/api/llms/update/{llm_id}` | แก้ไข/เปิด-ปิด LLM |
+| DELETE | `/api/llms/delete/{llm_id}` | ลบ (soft delete) |
+| POST | `/api/llms/{llm_id}/test` | ทดสอบการเชื่อมต่อ Ollama |
+| GET/POST | `/api/conversations`, `/api/conversations/create` | รายการ/สร้างบทสนทนา |
+| GET/DELETE | `/api/conversations/{id}`, `/api/conversations/delete/{id}` | อ่าน/ลบบทสนทนา |
+| POST | `/api/conversations/{id}/messages` | ส่งข้อความ — ตอบกลับเป็น NDJSON stream (`{"delta"}` ... `{"done"}` หรือ `{"error"}`) |
 | GET | `/api/assessment/criteria` | รายการเกณฑ์ประเมินทั้งหมด (static) |
-| POST | `/api/assessment/{model_id}/run` | รันการประเมินใหม่ 1 รอบ |
-| GET | `/api/assessment/{model_id}` | ผลล่าสุด |
-| GET | `/api/assessment/{model_id}/history` | ประวัติทุกรอบ |
+| POST | `/api/assessment/{llm_id}/run` | เริ่มการประเมินเบื้องหลัง — คืน `job_id` ทันที |
+| GET | `/api/assessment/jobs/{job_id}` | ความคืบหน้า: `status`, `step`, `total`, `label`, `report_id` |
+| GET | `/api/assessment/{llm_id}` | ผลล่าสุด |
+| GET | `/api/assessment/{llm_id}/history` | ประวัติทุกรอบ |
 
 ---
 
@@ -165,8 +175,11 @@ poetry run python -m matini.cmd.web
 - **"ผลลัพธ์จาก judge model ไม่ใช่ JSON ที่แปลงได้"** → โมเดลเล็กบางตัวไม่ทำตาม instruction เรื่อง JSON
   ดีนัก ลองโมเดลอื่น หรือดู field `judge_error` ในผลลัพธ์แต่ละเกณฑ์เพื่อดู raw response
 - **หน้าเว็บไม่มีสไตล์ / ปุ่มไม่มีสี** → ลืม build Tailwind (ขั้นตอนที่ 3)
-- **404 ตอนกดปุ่ม "NIST AI RMF Assessment"** → ตรวจสอบว่า FastAPI backend รันอยู่ (Flask หน้าเว็บ
-  เรียก API ผ่าน `API_URL` เพื่อดึงเกณฑ์/ผลลัพธ์)
+- **API ไม่ขึ้น / error ตอนสตาร์ทเรื่อง Mongo** → ตรวจสอบว่า MongoDB รันอยู่และ `MONGODB_URI` ถูกต้อง
+- **`beanie` ติดตั้งไม่ได้** → Beanie 2.x รองรับ Python < 3.14 ใช้ Python 3.12/3.13
+- **dropdown โมเดลในหน้าแชทว่าง** → ยังไม่ได้เพิ่ม LLM ที่หน้า Admin (หรือถูกปิดใช้งานอยู่)
+- **หน้าเว็บเรียก API ไม่ได้** → ตรวจสอบว่า FastAPI backend รันอยู่ และ `API_URL` ใน `.env` ตรงกับที่ API ฟังอยู่
+  (เบราว์เซอร์เรียก API ตรง ๆ จากหน้าแชท/Admin)
 
 ---
 
@@ -175,9 +188,8 @@ poetry run python -m matini.cmd.web
 - **เกณฑ์ 12 ข้อเป็นชุดย่อยตัวแทน** ไม่ใช่ NIST AI RMF Core ฉบับเต็ม (~72 subcategories) —
   ก่อนเก็บข้อมูลจริงควรขยายชุดเกณฑ์และตรวจสอบความตรงเชิงเนื้อหาโดยผู้เชี่ยวชาญ (IOC) ตาม roadmap ข้อ D
 - **self-evaluation bias** ถ้าใช้โมเดลเดียวกันเป็นทั้ง subject และ judge (ดูหัวข้อ 1)
-- **เก็บผลแบบ in-memory** ไม่ถาวร ไม่เหมาะเก็บข้อมูลจริงสำหรับ analysis ของบทความ
+- **หน้า Admin ยังไม่มีระบบยืนยันตัวตน** และ CORS เปิดกว้าง — ใช้ในเครือข่ายที่เชื่อถือได้เท่านั้น
+- **สถานะงานประเมินที่กำลังรันเก็บใน memory** — รีสตาร์ท API ระหว่างรัน งานนั้นจะหาย (ผลที่เสร็จแล้วเก็บใน MongoDB)
 - **probe prompt มีแค่ 1 ข้อ/เกณฑ์** สำหรับหมวด MEASURE — ความน่าเชื่อถือ (reliability) ของผลจะต่ำ
   ถ้าทดสอบครั้งเดียว ควรรันซ้ำหลายรอบ/สุ่ม prompt หลายแบบต่อมิติก่อนสรุปผลในบทความ
-- **blocking call ใน async endpoint**: `api/services/assessment.py` เรียก Ollama แบบ synchronous
-  ภายใน FastAPI async route (สไตล์เดียวกับ `guardrails.py` เดิมที่ใช้ `time.sleep`) — รับได้สำหรับ POC ที่มี
-  ผู้ใช้ทีละคน แต่ไม่เหมาะกับ production ที่มีหลาย request พร้อมกัน
+- **Ollama เป็น provider เดียวที่รองรับตอนนี้** — การเพิ่ม provider อื่นต้องเพิ่ม client ใน `api/services/`

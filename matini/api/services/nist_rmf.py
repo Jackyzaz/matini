@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from matini.api.schemas.assessment import AssessmentCriterion, EthicsDimension, NistFunction
+from matini.schemas.assessment import AssessmentCriterion, EthicsDimension, NistFunction
 
 # Representative subset of NIST AI RMF 1.0 categories used by this POC.
 # See the docstring on AssessmentCriterion for why this is a subset, not the full RMF Core.

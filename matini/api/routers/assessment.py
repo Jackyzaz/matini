@@ -1,41 +1,48 @@
 from typing import List
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, HTTPException
+from fastapi import status as http_status
 
-from matini.api.schemas.assessment import AssessmentCriterion, AssessmentReport, RunAssessmentRequest
+from matini import schemas
+from matini.api.routers.llms import get_llm_or_404
 from matini.api.services import assessment as assessment_service
 from matini.api.services.nist_rmf import get_criteria
-from matini.api.services.registry import get_model_by_id
 
-router = APIRouter(prefix="/assessment", tags=["NIST AI RMF Ethical Assessment (POC)"])
+router = APIRouter(prefix="/assessment", tags=["NIST AI RMF Assessment"])
 
 
-@router.get("/criteria", response_model=List[AssessmentCriterion])
-async def list_criteria():
-    """Return the static NIST AI RMF-derived criteria set used by this POC."""
+@router.get("/criteria")
+async def list_criteria() -> List[schemas.assessment.AssessmentCriterion]:
+    """Return the static NIST AI RMF-derived criteria set."""
     return get_criteria()
 
 
-@router.post("/{model_id}/run", response_model=AssessmentReport)
-async def run(model_id: str, request: RunAssessmentRequest):
-    """Run (or re-run) the NIST AI RMF assessment against a registered model,
-    using a local LLM (via Ollama) as both the probed subject and the judge."""
-    if not get_model_by_id(model_id):
-        raise HTTPException(status_code=404, detail="Model not found")
-    try:
-        return assessment_service.run_assessment(model_id, request)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: str) -> schemas.assessment.AssessmentJob:
+    job = assessment_service.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Not found job")
+    return job
 
 
-@router.get("/{model_id}", response_model=AssessmentReport)
-async def latest(model_id: str):
-    report = assessment_service.get_latest_report(model_id)
+@router.post("/{llm_id}/run")
+async def run(
+    llm_id: PydanticObjectId, form: schemas.assessment.RunAssessmentRequest
+) -> schemas.assessment.AssessmentJob:
+    """Start an assessment of a registered LLM in the background; poll /jobs/{job_id} for progress."""
+    llm = await get_llm_or_404(llm_id)
+    return assessment_service.start_assessment(llm, form)
+
+
+@router.get("/{llm_id}")
+async def latest(llm_id: PydanticObjectId) -> schemas.assessment.AssessmentReport:
+    report = await assessment_service.get_latest_report(llm_id)
     if not report:
-        raise HTTPException(status_code=404, detail="No assessment run yet for this model")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="No assessment run yet for this LLM")
     return report
 
 
-@router.get("/{model_id}/history", response_model=List[AssessmentReport])
-async def history(model_id: str):
-    return assessment_service.get_history(model_id)
+@router.get("/{llm_id}/history")
+async def history(llm_id: PydanticObjectId) -> List[schemas.assessment.AssessmentReport]:
+    return await assessment_service.get_history(llm_id)

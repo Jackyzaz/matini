@@ -1,10 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from matini import models
 from matini.api.core.config import settings
 from matini.api.routers import api_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await models.init_beanie(app, settings)
+    yield
+
+
 def create_application() -> FastAPI:
     app = FastAPI(
+        lifespan=lifespan,
         title=settings.app_title,
         version=settings.app_version,
         docs_url="/docs",

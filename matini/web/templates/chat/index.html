@@ -1,0 +1,84 @@
+{% extends "base/base_layout.html" %}
+
+{% block title %}Chat{% endblock %}
+
+{% block shell %}
+<input type="hidden" id="initial_conversation_id" value="{{ conversation_id }}">
+<div class="h-full flex overflow-hidden bg-white">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="hidden md:flex absolute md:static inset-y-0 left-0 z-30 w-72 shrink-0 flex-col bg-slate-900 text-slate-100">
+        <div class="h-14 px-4 flex items-center justify-between border-b border-white/10">
+            <a href="/" class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-indigo-300 flex items-center justify-center text-white">
+                    <i class="ph ph-chats-circle text-lg"></i>
+                </div>
+                <span class="text-base font-bold tracking-tight font-heading">Matini<span class="text-indigo-300">.ai</span></span>
+            </a>
+        </div>
+
+        <div class="p-3">
+            <button id="new_chat_btn" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-white/15 hover:bg-white/10 text-sm font-medium transition-colors">
+                <i class="ph ph-plus"></i> แชทใหม่
+            </button>
+        </div>
+
+        <div class="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">ประวัติการแชท</div>
+        <nav id="conversation_list" class="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5"></nav>
+
+        <div class="p-3 border-t border-white/10 space-y-0.5 text-sm">
+            <a id="assess_link" href="#" class="hidden flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+                <i class="ph ph-clipboard-text"></i> ประเมินโมเดลนี้ (NIST AI RMF)
+            </a>
+            <a href="/admin/" class="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition-colors">
+                <i class="ph ph-gear"></i> จัดการ LLM (Admin)
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <section class="flex-1 min-w-0 flex flex-col">
+        <header class="md:hidden h-14 px-3 flex items-center gap-2 border-b border-slate-200">
+            <button id="menu_btn" class="p-2 rounded-lg hover:bg-slate-100" aria-label="เมนู"><i class="ph ph-list text-xl"></i></button>
+            <span class="font-semibold text-sm truncate" id="mobile_title">Matini</span>
+        </header>
+
+        <div id="messages" class="flex-1 overflow-y-auto">
+            <div id="empty_state" class="h-full flex flex-col items-center justify-center text-center px-6">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white mb-4">
+                    <i class="ph ph-chats-circle text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-semibold text-slate-800">วันนี้อยากให้ช่วยอะไรดี?</h1>
+                <p id="empty_hint" class="text-sm text-slate-500 mt-2">เลือกโมเดลด้านล่างแล้วพิมพ์คำถามได้เลย</p>
+            </div>
+            <div id="message_list" class="max-w-3xl mx-auto w-full px-4 py-6 space-y-6"></div>
+        </div>
+
+        <!-- Composer -->
+        <div class="px-4 pb-4 pt-2">
+            <div class="max-w-3xl mx-auto">
+                <div class="rounded-2xl border border-slate-300 bg-white shadow-sm focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/15 transition">
+                    <textarea id="prompt_input" rows="1" placeholder="พิมพ์คำถามของคุณ… (Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)"
+                        class="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm leading-6 outline-none max-h-52"></textarea>
+                    <div class="flex items-center justify-between gap-2 px-3 pb-2.5">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <i class="ph ph-cpu text-slate-400"></i>
+                            <select id="llm_select" class="text-xs bg-transparent text-slate-700 font-medium outline-none cursor-pointer max-w-[14rem] truncate">
+                                <option value="">กำลังโหลดโมเดล…</option>
+                            </select>
+                        </div>
+                        <button id="send_btn" class="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white flex items-center justify-center transition-colors" aria-label="ส่ง">
+                            <i class="ph ph-arrow-up text-lg font-bold"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-[11px] text-slate-400 text-center mt-2">โมเดลอาจตอบผิดพลาดได้ ควรตรวจสอบข้อมูลสำคัญเสมอ</p>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/python" src="{{ url_for('static', filename='brython/chat.py') }}"></script>
+{% endblock %}

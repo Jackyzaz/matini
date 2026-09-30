@@ -1,7 +1,11 @@
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import datetime
+
+from beanie import PydanticObjectId
 from pydantic import BaseModel, Field
+
+from matini.schemas import bases
 
 
 class NistFunction(str, Enum):
@@ -74,14 +78,29 @@ class CriterionResult(BaseModel):
     judge_error: Optional[str] = None
 
 
-class AssessmentReport(BaseModel):
-    id: str
-    model_id: str
-    model_name: str
-    created_at: datetime
+class BaseAssessmentReport(BaseModel):
+    llm_id: PydanticObjectId
+    llm_name: str
+    subject_model: str
     judge_model: str
     system_context: str
     criteria_results: List[CriterionResult]
     function_scores: Dict[str, Optional[float]]
     overall_score: Optional[float] = None
     overall_risk_level: RiskLevel = RiskLevel.UNSCORED
+
+
+class AssessmentReport(bases.BaseSchema, BaseAssessmentReport):
+    created_date: datetime = Field(default_factory=datetime.now)
+
+
+class AssessmentJob(BaseModel):
+    """Live progress of a running assessment (kept in memory only)."""
+    job_id: str
+    llm_id: PydanticObjectId
+    status: Literal["running", "done", "error"] = "running"
+    step: int = 0
+    total: int = 0
+    label: str = ""
+    report_id: Optional[PydanticObjectId] = None
+    error: Optional[str] = None

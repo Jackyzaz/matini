@@ -1,36 +1,38 @@
-"""Assessment engine: runs the NIST AI RMF criteria set against one registered model.
+"""Assessment engine: runs the NIST AI RMF criteria set against one registered LLM.
 
 For each criterion this:
   1. (MEASURE items only, when run_probes=True) sends criterion.probe_prompt to the
-     "subject" model via Ollama and captures the raw transcript as live evidence.
-  2. Builds a judge prompt combining the NIST criterion, the model's registry
+     "subject" LLM (the registered one, at its own base_url) and captures the raw
+     transcript as live evidence.
+  2. Builds a judge prompt combining the NIST criterion, the LLM's
      metadata, any evaluator-supplied evidence_notes, and the probe transcript.
   3. Calls the "judge" model via Ollama and parses a {score, risk_level, rationale}
      verdict out of it.
   4. Aggregates per-NIST-function and overall scores/risk levels.
 
-Storage is in-memory only (ASSESSMENTS_DB), same POC-grade pattern as
-services/registry.py's MODELS_DB — restart the API process and history is gone.
-Swap this for a real datastore before using it to collect data for the paper.
+A run takes minutes on modest hardware, so it executes as a background asyncio task
+and reports progress through an in-memory AssessmentJob that the UI polls. Finished
+reports are stored in MongoDB (models.Assessment). The blocking Ollama calls run in
+worker threads so the API event loop stays responsive.
 """
+import asyncio
 import uuid
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
+from matini import models
 from matini.api.core.config import settings
-from matini.api.schemas.assessment import (
+from matini.schemas.assessment import (
     AssessmentCriterion,
-    AssessmentReport,
+    AssessmentJob,
     CriterionResult,
     RiskLevel,
     RunAssessmentRequest,
 )
-from matini.api.schemas.models import AIModel
 from matini.api.services import local_llm
 from matini.api.services.nist_rmf import get_criteria
-from matini.api.services.registry import get_model_by_id
 
-ASSESSMENTS_DB: Dict[str, List[AssessmentReport]] = {}
+JOBS: Dict[str, AssessmentJob] = {}
+_TASKS: Set[asyncio.Task] = set()  # strong refs so running tasks aren't garbage-collected
 
 # score (1-5, higher = better-mitigated) -> risk level, highest threshold first
 _SCORE_TO_RISK = [
@@ -65,7 +67,7 @@ def _risk_from_score(score: Optional[float]) -> RiskLevel:
 
 def _build_user_prompt(
     criterion: AssessmentCriterion,
-    model: AIModel,
+    llm: models.LLM,
     system_context: str,
     evidence_notes: str,
     probe_transcript: Optional[str],
@@ -75,8 +77,8 @@ def _build_user_prompt(
         f"มิติจริยธรรม: {criterion.ethics_dimension.value}",
         f"คำถามชี้นำ: {criterion.guiding_question}",
         "",
-        f"ระบบ/โมเดลที่ประเมิน: {model.name} ({model.provider}) — {model.tagline}",
-        f"คำอธิบาย: {model.description}",
+        f"ระบบ/โมเดลที่ประเมิน: {llm.name} ({llm.provider}, model tag: {llm.model_name})",
+        f"คำอธิบาย: {llm.description or '-'}",
     ]
     if system_context:
         parts.append(f"บริบทเพิ่มเติมจากผู้ประเมิน: {system_context}")
@@ -95,25 +97,71 @@ def _build_user_prompt(
     return "\n".join(parts)
 
 
-def run_assessment(model_id: str, request: RunAssessmentRequest) -> AssessmentReport:
-    model = get_model_by_id(model_id)
-    if not model:
-        raise ValueError(f"ไม่พบโมเดล '{model_id}' ใน registry")
+def get_job(job_id: str) -> Optional[AssessmentJob]:
+    return JOBS.get(job_id)
+
+
+def start_assessment(llm: models.LLM, request: RunAssessmentRequest) -> AssessmentJob:
+    """Register a job and run the assessment in the background. Returns immediately."""
+    criteria = get_criteria()
+    probes = sum(1 for c in criteria if request.run_probes and c.probe_prompt)
+    job = AssessmentJob(
+        job_id=uuid.uuid4().hex,
+        llm_id=llm.id,
+        total=len(criteria) + probes,
+        label="เริ่มการประเมิน…",
+    )
+    JOBS[job.job_id] = job
+
+    task = asyncio.create_task(_run_job(job, llm, request))
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+    return job
+
+
+async def _run_job(job: AssessmentJob, llm: models.LLM, request: RunAssessmentRequest) -> None:
+    try:
+        report = await run_assessment(llm, request, job)
+        job.report_id = report.id
+        job.status = "done"
+        job.step = job.total
+        job.label = "เสร็จสิ้น"
+    except Exception as exc:  # surface any failure to the polling UI instead of losing it
+        job.status = "error"
+        job.error = f"{exc.__class__.__name__}: {exc}"
+
+
+async def run_assessment(
+    llm: models.LLM, request: RunAssessmentRequest, job: Optional[AssessmentJob] = None
+) -> models.Assessment:
+    def progress(label: str, advance: bool = False) -> None:
+        if job:
+            job.label = label
+            if advance:
+                job.step += 1
 
     judge_model = request.judge_model or settings.ollama_judge_model
-    subject_model = model.ollama_model_name or settings.ollama_subject_model
+    subject_base_url = llm.base_url or settings.ollama_base_url
     inputs_by_id = {c.criterion_id: c.evidence_notes for c in request.criteria_inputs}
 
     results: List[CriterionResult] = []
     for criterion in get_criteria():
         evidence_notes = inputs_by_id.get(criterion.id, "")
         probe_transcript: Optional[str] = None
+        name = f"{criterion.nist_category} — {criterion.title}"
 
         if request.run_probes and criterion.probe_prompt:
+            progress(f"ทดสอบโมเดล: {name}")
             try:
-                probe_transcript = local_llm.probe_subject(criterion.probe_prompt, model=subject_model)
+                probe_transcript = await asyncio.to_thread(
+                    local_llm.probe_subject,
+                    criterion.probe_prompt,
+                    model=llm.model_name,
+                    base_url=subject_base_url,
+                )
             except local_llm.OllamaUnavailableError as exc:
                 evidence_notes = (evidence_notes + f"\n[Probe ล้มเหลว: {exc}]").strip()
+            progress(f"ทดสอบโมเดล: {name}", advance=True)
 
         result = CriterionResult(
             criterion=criterion,
@@ -121,9 +169,12 @@ def run_assessment(model_id: str, request: RunAssessmentRequest) -> AssessmentRe
             probe_transcript=probe_transcript,
         )
 
+        progress(f"ให้คะแนน: {name}")
         try:
-            user_prompt = _build_user_prompt(criterion, model, request.system_context, evidence_notes, probe_transcript)
-            verdict = local_llm.judge(JUDGE_SYSTEM_PROMPT, user_prompt, model=judge_model)
+            user_prompt = _build_user_prompt(criterion, llm, request.system_context, evidence_notes, probe_transcript)
+            verdict = await asyncio.to_thread(
+                local_llm.judge, JUDGE_SYSTEM_PROMPT, user_prompt, model=judge_model
+            )
 
             score = int(verdict["score"])
             score = max(1, min(5, score))
@@ -143,6 +194,7 @@ def run_assessment(model_id: str, request: RunAssessmentRequest) -> AssessmentRe
             result.risk_level = RiskLevel.UNSCORED
 
         results.append(result)
+        progress(f"ให้คะแนน: {name}", advance=True)
 
     function_scores: Dict[str, Optional[float]] = {}
     for fn in ["GOVERN", "MAP", "MEASURE", "MANAGE"]:
@@ -152,11 +204,10 @@ def run_assessment(model_id: str, request: RunAssessmentRequest) -> AssessmentRe
     all_scores = [r.score for r in results if r.score is not None]
     overall_score = round(sum(all_scores) / len(all_scores), 2) if all_scores else None
 
-    report = AssessmentReport(
-        id=str(uuid.uuid4()),
-        model_id=model.id,
-        model_name=model.name,
-        created_at=datetime.now(timezone.utc),
+    report = models.Assessment(
+        llm_id=llm.id,
+        llm_name=llm.name,
+        subject_model=llm.model_name,
         judge_model=judge_model,
         system_context=request.system_context,
         criteria_results=results,
@@ -164,15 +215,13 @@ def run_assessment(model_id: str, request: RunAssessmentRequest) -> AssessmentRe
         overall_score=overall_score,
         overall_risk_level=_risk_from_score(overall_score),
     )
-
-    ASSESSMENTS_DB.setdefault(model_id, []).append(report)
+    await report.insert()
     return report
 
 
-def get_latest_report(model_id: str) -> Optional[AssessmentReport]:
-    reports = ASSESSMENTS_DB.get(model_id)
-    return reports[-1] if reports else None
+async def get_latest_report(llm_id) -> Optional[models.Assessment]:
+    return await models.Assessment.find(models.Assessment.llm_id == llm_id).sort("-created_date").first_or_none()
 
 
-def get_history(model_id: str) -> List[AssessmentReport]:
-    return ASSESSMENTS_DB.get(model_id, [])
+async def get_history(llm_id) -> List[models.Assessment]:
+    return await models.Assessment.find(models.Assessment.llm_id == llm_id).sort("-created_date").to_list()
