@@ -135,21 +135,52 @@
         <!-- Per-function score summary -->
         <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs">
             <h3 class="text-sm font-bold text-slate-900 mb-4">คะแนนตามฟังก์ชันหลักของ NIST AI RMF</h3>
-            <div class="space-y-3">
-                {% for fn in functions %}
-                {% set fscore = report.function_scores.get(fn) %}
-                <div>
-                    <div class="flex items-center justify-between text-xs mb-1">
-                        <span class="font-semibold text-slate-700 flex items-center gap-1.5">
-                            <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
-                        </span>
-                        <span class="font-mono text-slate-500">{{ fscore if fscore is not none else '—' }}{% if fscore is not none %}/5{% endif %}</span>
-                    </div>
-                    <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div class="h-full rounded-full bg-indigo-500" style="width: {{ ((fscore / 5 * 100) if fscore is not none else 0)|round(0, 'floor') }}%"></div>
-                    </div>
+            {% set radar_scores = [] %}
+            {% for fn in functions %}{% set _ = radar_scores.append(report.function_scores.get(fn)) %}{% endfor %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <!-- Radar of the 4 functions (Chart.js, drawn by matini.renderFunctionRadar) -->
+                <div class="relative w-full max-w-xs aspect-square mx-auto">
+                    <canvas id="function_radar" data-labels='{{ functions|tojson }}' data-scores='{{ radar_scores|tojson }}'
+                        aria-label="Radar chart คะแนนตามฟังก์ชัน NIST AI RMF" role="img"></canvas>
                 </div>
-                {% endfor %}
+
+                <!-- Per-function bars; click one to see its criteria (accordion) -->
+                <div class="space-y-2">
+                    {% for fn in functions %}
+                    {% set fscore = report.function_scores.get(fn) %}
+                    <details name="fn_scores" class="group rounded-xl border border-transparent open:border-slate-200 open:bg-slate-50/60 transition-colors">
+                        <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer rounded-xl px-2 py-1.5 hover:bg-slate-50">
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+                                    <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
+                                </span>
+                                <span class="font-mono text-slate-500 flex items-center gap-1.5">
+                                    {{ fscore if fscore is not none else '—' }}{% if fscore is not none %}/5{% endif %}
+                                    <i class="ph ph-caret-down text-slate-400 transition-transform group-open:rotate-180"></i>
+                                </span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                                <div class="h-full rounded-full bg-indigo-500" style="width: {{ ((fscore / 5 * 100) if fscore is not none else 0)|round(0, 'floor') }}%"></div>
+                            </div>
+                        </summary>
+                        <div class="px-2 pb-2.5 pt-1 space-y-2">
+                            {% for c in grouped_criteria.get(fn, []) %}
+                            {% set r = results_by_id.get(c.id) %}
+                            {% set cscore = r.score if r else none %}
+                            <div>
+                                <div class="flex items-baseline justify-between gap-2 text-[11px] mb-0.5">
+                                    <span class="text-slate-600 min-w-0"><span class="font-mono text-[10px] text-slate-400">{{ c.nist_category }}</span> {{ c.title }}</span>
+                                    <span class="font-mono text-slate-500 shrink-0">{{ cscore if cscore is not none else '—' }}{% if cscore is not none %}/5{% endif %}</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
+                                    <div class="h-full rounded-full {{ risk_dot(r.risk_level if r else 'Unscored') }}" style="width: {{ ((cscore / 5 * 100) if cscore is not none else 0)|round(0, 'floor') }}%"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endfor %}
+                </div>
             </div>
             <p class="text-[11px] text-slate-400 mt-4">
                 {% if report.judge_type == 'human' %}
@@ -370,6 +401,11 @@
 </div>
 {% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block extra_js %}
 <script type="text/python" src="{{ url_for('static', filename='brython/assessment.py') }}"></script>
+<script>window.matini.renderFunctionRadar("function_radar");</script>
 {% endblock %}

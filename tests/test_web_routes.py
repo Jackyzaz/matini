@@ -80,6 +80,7 @@ def test_assessment_page_without_profile_warns_and_has_no_evidence_form(web_clie
     assert 'id="profile_card"' in html and "ยังไม่มีข้อมูลการประเมินของ LLM นี้" in html
     assert 'href="/admin/?profile=abc"' in html
     assert "evidence__" not in html and 'name="system_context"' not in html
+    assert 'id="function_radar"' not in html  # no report, no radar
 
 
 def test_assessment_page_with_profile_and_snapshot_report(web_client, monkeypatch):
@@ -115,6 +116,32 @@ def test_assessment_page_with_profile_and_snapshot_report(web_client, monkeypatc
     assert "นโยบาย" in html and "https://example.com/x" in html
     # a report from before profiles existed still shows its free-text notes
     assert "บันทึกจากรายงานเก่า" in html
+
+
+def test_assessment_page_shows_function_radar_and_criterion_accordion(web_client, monkeypatch):
+    llm = {"id": "abc", "name": "Test LLM", "provider": "ollama", "model_name": "llama3.1", "base_url": "",
+           "assessment_profile": EMPTY_PROFILE}
+    result = lambda criterion, score, risk: {
+        "criterion": criterion, "evidence_notes": "", "evidence": None, "evidence_files": {}, "probe_transcript": None,
+        "score": score, "risk_level": risk, "rationale": "", "judge_error": None,
+    }
+    report = {
+        "id": "r1", "llm_id": "abc", "llm_name": "Test LLM", "subject_model": "llama3.1", "judge_model": "j",
+        "criteria_results": [result(CRITERIA[0], 4, "Low"), result(CRITERIA[1], 3, "Medium"), result(CRITERIA[2], 2, "High")],
+        "function_scores": {"GOVERN": 3.5, "MAP": None, "MEASURE": 2}, "overall_score": 3, "overall_risk_level": "Medium",
+        "created_date": "2026-09-30",
+    }
+    fake_api(monkeypatch, llm, report)
+    html = web_client.get("/assessment/abc").data.decode("utf-8")
+    # radar: Chart.js is loaded and the canvas carries the four function scores (null = unscored)
+    assert "chart.js@" in html and 'renderFunctionRadar("function_radar")' in html
+    assert """data-labels='["GOVERN", "MAP", "MEASURE", "MANAGE"]'""" in html
+    assert """data-scores='[3.5, null, 2, null]'""" in html
+    # each function bar is an accordion listing its criteria with their own bars
+    assert html.count('<details name="fn_scores"') == 4
+    govern = html.split('<details name="fn_scores"')[1]
+    assert "Policies" in govern and "Accountability" in govern and "Bias Testing" not in govern
+    assert "Bias Testing" in html.split('<details name="fn_scores"')[3]
 
 
 def test_assessment_page_has_progress_bar(web_client, monkeypatch):

@@ -33,6 +33,56 @@ window.matini = {
     else onOk(text);
   },
 
+  // Radar of the NIST function scores (0-5) on the assessment page. Labels/scores come from the
+  // canvas data-* attributes; a null score is an unscored function and is left as a gap.
+  // No-op when there is no report (no canvas) or Chart.js failed to load (the bars still show).
+  renderFunctionRadar(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !window.Chart) return;
+    const labels = JSON.parse(canvas.dataset.labels || "[]");
+    const scores = JSON.parse(canvas.dataset.scores || "[]");
+    const font = { family: "Inter, sans-serif" };
+    new window.Chart(canvas, {
+      type: "radar",
+      data: {
+        labels,
+        datasets: [{
+          label: "คะแนน",
+          data: scores,
+          spanGaps: false,
+          borderColor: "#6366f1",
+          backgroundColor: "rgba(99, 102, 241, 0.18)",
+          borderWidth: 2,
+          pointBackgroundColor: "#6366f1",
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            min: 0,
+            max: 5,
+            ticks: { stepSize: 1, backdropColor: "transparent", color: "#94a3b8", font: { ...font, size: 10 } },
+            pointLabels: { color: "#334155", font: { ...font, size: 11, weight: "600" } },
+            grid: { color: "#e2e8f0" },
+            angleLines: { color: "#e2e8f0" },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => (ctx.raw === null || ctx.raw === undefined ? "ยังไม่มีคะแนน" : `${ctx.raw}/5`),
+            },
+          },
+        },
+      },
+    });
+  },
+
   // POST JSON and read an NDJSON response line by line.
   // Callbacks: onLine(rawLineString) for each non-empty line, onEnd(errorMessageOrNull) exactly once.
   async streamNdjson(url, body, onLine, onEnd) {
