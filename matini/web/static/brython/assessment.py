@@ -17,7 +17,6 @@ ASSESSOR_KEY = "matini.assessor_name"
 MANUAL = "manual"  # the judge_select value for a human assessor
 manual_fields = document["manual_fields"]
 assessor_input = document["assessor_name"]
-probes_checkbox = document.select_one("input[name=run_probes]")
 
 
 def ls_get(key):
@@ -120,15 +119,11 @@ def choose_default_judge():
 
 
 def update_mode():
-    """A human assessor needs the MEASURE replies to score, so probes are forced on and the name is required."""
     manual = is_manual()
     if manual:
         manual_fields.classList.remove("hidden")
     else:
         manual_fields.classList.add("hidden")
-    if manual:
-        probes_checkbox.checked = True
-    probes_checkbox.disabled = manual
     document["run_btn_text"].text = "เริ่มประเมินโดยมนุษย์" if manual else "Run NIST AI RMF Assessment"
     update_warning()
 
@@ -159,7 +154,7 @@ def start(ev):
         body = {"assessor_name": assessor}
     else:
         url = f"/api/assessment/{llm_id}/run"
-        body = {"judge_llm_id": judge_select.value, "run_probes": probes_checkbox.checked}
+        body = {"judge_llm_id": judge_select.value}
     set_running(True)
     render_progress({"step": 0, "total": 1, "label": "เริ่มการประเมิน…"})
     window.scrollTo(0, 0)

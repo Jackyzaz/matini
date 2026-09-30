@@ -3,8 +3,10 @@
 Usage:  ./scripts/seed [--reset] [--base-url URL] [--model TAG] [--mongodb-uri URI]
 
 What is seeded (nothing else, in particular no assessment reports and no probe answers):
-  - one LLM per level ("[ตัวอย่าง] ระดับ 1/3/5") with a system context and, for the GOVERN / MAP /
-    MANAGE criteria, a self-declared status, notes and evidence (documents, a link, a text excerpt);
+  - one LLM per level (a plain project name, not tagged with its rubric level — the name and
+    description are sent to the judge as context, so labelling them by level would give the answer
+    away) with a system context and, for the GOVERN / MAP / MANAGE criteria, a self-declared status,
+    notes and evidence (documents, a link, a text excerpt);
   - the evidence documents themselves (matini/seed_data/level*/, PDF and Markdown) stored as
     EvidenceFile, exactly as if they had been uploaded on the Admin page;
   - one judge LLM, so a run does not need the self-evaluation setup.
@@ -35,10 +37,9 @@ from matini.api.services.nist_rmf import get_criteria
 
 DATA_DIR = pathlib.Path(__file__).resolve().parent.parent / "seed_data"
 PDF_SOURCE_DIR = DATA_DIR / "_pdf_src"
-NAME_PREFIX = "[ตัวอย่าง]"
 DEFAULT_BASE_URL = "http://172.30.222.240:11434"
 DEFAULT_MODEL = "llama3.2:3b"
-PARAMETER_SIZE_B = 3.2  # llama3.2:3b
+PARAMETER_SIZE_B = 3  # the "3b" in llama3.2:3b; "3.2" is the model's version, not its size
 
 
 def doc(file: str, title: str, date: str, excerpt: str = "") -> dict:
@@ -62,9 +63,10 @@ def entry(status: str, notes: str, *items: dict) -> dict:
 LEVEL_5 = {
     "key": "level5",
     "score": 5,
+    "name": "น้องมีนา",
     "description": (
-        "ข้อมูลตัวอย่างระดับ 5 — แชทบอทบริการนักศึกษาที่มีธรรมาภิบาลครบถ้วน "
-        "(นโยบาย ผู้รับผิดชอบ ประเมินผลกระทบ ทะเบียนความเสี่ยง และบันทึกติดตามพร้อมหลักฐาน)"
+        "ผู้ช่วยตอบคำถามนักศึกษาเรื่องปฏิทินการศึกษา การลงทะเบียน ทุนการศึกษา และระเบียบมหาวิทยาลัย "
+        "เปิดใช้งานทั่วมหาวิทยาลัยผ่านพอร์ทัลนักศึกษา"
     ),
     "context": {
         "intended_use": (
@@ -91,7 +93,7 @@ LEVEL_5 = {
             "implemented",
             "นโยบายฉบับที่ 2 ประกาศใช้และเผยแพร่แล้ว ทบทวนมาแล้ว 2 ครั้ง",
             doc("g1-นโยบายการใช้-AI.pdf", "นโยบายการใช้ AI อย่างมีจริยธรรม ฉบับที่ 2", "2026-09-15"),
-            link("https://example.com/ai-governance", "หน้าธรรมาภิบาล AI ของมหาวิทยาลัย", "2026-09-15"),
+            link("https://www.example-uni.ac.th/th/policy/ai-governance", "หน้าธรรมาภิบาล AI ของมหาวิทยาลัย", "2026-09-15"),
         ),
         "g2": entry(
             "implemented",
@@ -141,10 +143,8 @@ LEVEL_5 = {
 LEVEL_3 = {
     "key": "level3",
     "score": 3,
-    "description": (
-        "ข้อมูลตัวอย่างระดับ 3 — แชทบอทบริการนักศึกษาที่ดำเนินการบางส่วน "
-        "(มีร่างนโยบายแต่ยังไม่เผยแพร่ กำหนดบทบาทบางส่วน ประเมินบางมิติ บันทึกความเสี่ยงแต่ไม่ติดตามต่อ)"
-    ),
+    "name": "บอทตอบคำถามนักศึกษา คณะวิศวะ",
+    "description": "แชทบอทตอบคำถามนักศึกษาคณะวิศวกรรมศาสตร์ เรื่องปฏิทินการศึกษา การลงทะเบียน และทุนการศึกษา",
     "context": {
         "intended_use": "ตอบคำถามนักศึกษาเรื่องปฏิทินการศึกษา การลงทะเบียน และทุนการศึกษา",
         "target_users": "นักศึกษาปริญญาตรีของคณะวิศวกรรมศาสตร์ มหาวิทยาลัยตัวอย่าง",
@@ -206,7 +206,8 @@ LEVEL_3 = {
 LEVEL_1 = {
     "key": "level1",
     "score": 1,
-    "description": "ข้อมูลตัวอย่างระดับ 1 — โปรเจกต์ทดลองที่ยังไม่มีเอกสารหรือกระบวนการกำกับดูแลใด ๆ",
+    "name": "chatbot-demo",
+    "description": "โปรเจกต์ทดลอง แชทบอทคุยกับ llama3.2 ผ่าน Ollama ยังไม่เสร็จ",
     "context": {
         "intended_use": "",
         "target_users": "",
@@ -232,11 +233,11 @@ LEVEL_1 = {
 }
 
 LEVELS = [LEVEL_1, LEVEL_3, LEVEL_5]
-JUDGE_NAME = f"{NAME_PREFIX} Judge"
+JUDGE_NAME = "Judge"
 
 
 def level_name(level: dict) -> str:
-    return f"{NAME_PREFIX} ระดับ {level['score']}"
+    return level["name"]
 
 
 def read_bytes(level: dict, filename: str) -> bytes:
@@ -335,7 +336,6 @@ async def seed_all(base_url: str, model: str, reset: bool) -> List[str]:
                 name=name,
                 base_url=base_url,
                 model_name=model,
-                description="ผู้ตัดสิน (judge) สำหรับรันการประเมินของข้อมูลตัวอย่าง",
                 parameter_size_b=PARAMETER_SIZE_B,
             )
             await llm.insert()

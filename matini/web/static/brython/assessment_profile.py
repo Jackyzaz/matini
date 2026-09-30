@@ -284,9 +284,7 @@ def file_info(item):
         )
         info <= link
         info <= html.SPAN(format_size(meta["size"]), Class="text-slate-400")
-        if meta["has_text"]:
-            info <= html.SPAN("ดึงข้อความสำเร็จ", Class="badge badge-success badge-soft badge-sm")
-        else:
+        if not meta["has_text"]:
             badge = html.SPAN("ดึงข้อความไม่ได้", Class="badge badge-warning badge-soft badge-sm")
             badge.attrs["title"] = meta["extract_error"] or ""
             info <= badge

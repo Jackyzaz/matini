@@ -43,4 +43,9 @@
   --radius-selector: 0.5rem;
   --radius-field: 0.625rem;
   --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }

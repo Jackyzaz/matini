@@ -26,8 +26,11 @@ def action_button(icon, title, handler, cls="hover:bg-slate-100 text-slate-600")
 
 def size_badge(llm):
     if llm.get("parameter_size_b") is None:
-        return html.SPAN("—", Class="text-slate-400")
-    return html.SPAN(format_size(llm["parameter_size_b"]), Class="badge badge-primary badge-soft badge-sm font-mono font-semibold")
+        return None
+    return html.SPAN(
+        format_size(llm["parameter_size_b"]),
+        Class="badge badge-primary badge-soft badge-sm font-mono font-semibold",
+    )
 
 
 def format_size(value):
@@ -47,18 +50,26 @@ def render_table(data):
             set_form_mode(None)
     if not data["llms"]:
         tbody <= html.TR(
-            html.TD("ยังไม่มี LLM — เพิ่มได้จากฟอร์มด้านขวา", colspan="6", Class="px-4 py-8 text-center text-slate-400")
+            html.TD("ยังไม่มี LLM — เพิ่มได้จากฟอร์มด้านขวา", colspan="4", Class="px-4 py-8 text-center text-slate-400")
         )
         return
     for llm in data["llms"]:
         active = llm["status"] == "active"
         badge = html.SPAN(
             "เปิดใช้งาน" if active else "ปิดอยู่",
-            Class="px-2 py-0.5 rounded-full text-[11px] font-semibold "
+            Class="px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap "
             + ("bg-emerald-50 text-emerald-700" if active else "bg-slate-100 text-slate-500"),
         )
+        llm_cell = html.DIV(Class="space-y-1")
         name = html.DIV(Class="font-semibold text-slate-900")
         name.text = llm["name"]
+        llm_cell <= name
+        tag_row = html.DIV(Class="flex items-center gap-1.5 font-mono text-slate-500")
+        tag_row.text = llm["model_name"]
+        size = size_badge(llm)
+        if size is not None:
+            tag_row <= size
+        llm_cell <= tag_row
         actions = html.DIV(Class="flex items-center justify-end gap-0.5")
         actions <= html.A(html.I(Class="ph ph-clipboard-text"), href="/assessment/" + llm["id"], Class="p-1.5 rounded-lg text-sm hover:bg-slate-100 text-slate-600", title="ประเมิน NIST AI RMF")
         actions <= action_button("ph-folder-open", "ข้อมูลการประเมิน", make_open_profile(llm))
@@ -68,9 +79,7 @@ def render_table(data):
         actions <= action_button("ph-trash", "ลบ", make_delete(llm), "hover:bg-rose-50 text-rose-600")
         tbody <= html.TR(
             [
-                cell(name),
-                cell(llm["model_name"], "px-4 py-3 font-mono text-slate-700"),
-                cell(size_badge(llm)),
+                cell(llm_cell),
                 cell(llm["base_url"] or "(ค่าเริ่มต้นจาก .env)", "px-4 py-3 font-mono text-slate-500"),
                 cell(badge),
                 cell(actions, "px-4 py-3"),
