@@ -320,16 +320,37 @@ def make_open_file(panel, button):
             pre.text = text
             body <= pre
 
+        def show_rendered(meta):
+            # Markdown files are shown formatted (same sanitized renderer as the chat); the button flips to the raw text.
+            body.clear()
+            view = html.DIV(Class="md-content rounded-lg bg-white border border-slate-200 p-4 max-h-[70vh] overflow-auto")
+            view.innerHTML = window.matini.renderMarkdown(meta["text_preview"])
+            body <= view
+            text_btn.text = "ดูข้อความดิบ"
+            text_btn.unbind("click")
+            text_btn.bind("click", lambda ev: show_raw(meta))
+
+        def show_raw(meta):
+            show_text(meta)
+            text_btn.text = "ดูแบบจัดรูป"
+            text_btn.unbind("click")
+            text_btn.bind("click", lambda ev: show_rendered(meta))
+
         def ok(meta):
-            if meta["content_type"] == "application/pdf" or meta["filename"].lower().endswith(".pdf"):
+            name = meta["filename"].lower()
+            if meta["content_type"] == "application/pdf" or name.endswith(".pdf"):
                 body.clear()
                 body <= html.IFRAME(
                     src=f"{api_url()}/api/evidence-files/{file_id}/download?inline=true",
                     Class="w-full h-[70vh] rounded-lg border border-slate-200 bg-white",
                 )
+                text_btn.text = "แสดงข้อความที่ดึงได้"
                 text_btn.classList.remove("hidden")
                 text_btn.unbind("click")
                 text_btn.bind("click", lambda ev: show_text(meta))
+            elif name.endswith(".md") and meta["text_preview"]:
+                show_rendered(meta)
+                text_btn.classList.remove("hidden")
             else:
                 show_text(meta)
 

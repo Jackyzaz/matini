@@ -30,6 +30,7 @@ matini/
     static/js/matini.js   streamNdjson() + renderMarkdown() (marked + DOMPurify)
     static/css/      setup.css (Tailwind 4 + DaisyUI source) → app.css (build output, committed), custom.css
   docs/nist-rmf-poc-guide.md   Ollama/assessment setup guide (Thai)
+  cmd/seed.py + seed_data/   optional sample data script (see "No mock data"); level*/ = evidence files, _pdf_src/ = Markdown the PDFs were rendered from
 ```
 
 ## MongoDB pattern (follows `~/sindhu`)
@@ -51,7 +52,7 @@ matini/
 - **Human assessment** (`judge_type="human"`): `POST /api/assessment/{llm_id}/manual` (`assessor_name`, no auth so it is typed in) creates a **draft** `Assessment` (status `draft`, profile snapshot, no scores), then a background job sends the MEASURE probes to the subject; `job.report_id` is the draft. The human scores each criterion on `/assessment/<llm_id>/manual/<report_id>` (`PUT /assessment/reports/update/{id}/criteria/{cid}`), can add/rerun/delete `custom` probes (`/reports/{id}/criteria/{cid}/probes/...`, reports only, not stored on the criterion), and `POST /reports/{id}/complete` (422 while a criterion has no score) computes the aggregates and sets `completed`. Completed reports are immutable (409) and cannot be discarded; drafts can (soft delete). `status` is `draft`/`completed`/`delete`; reports written before it existed have no `status` field, so queries use `$nin`/`$ne`, never `== "completed"`. `get_latest_report` ignores drafts, `get_history` includes them; the Assessment page picks a report with `?report=<id>`. The manual page deliberately shows nothing from an LLM judge (anchoring). The draft row is inserted at once but its probes are saved when the job ends, so the UI opens the page only after the job is done; the probe/score endpoints reload the report after the slow model call so a concurrent score save is not overwritten. Documents are shown from `GET /evidence-files/{id}/download?inline=true` (PDF in an iframe) or `GET /evidence-files/{id}?full=true` (extracted text).
 - **Subject and judge**: both are LLMs registered in Admin, and both are called at their own `base_url` (empty means `OLLAMA_BASE_URL`). The subject (the AI being assessed) is the `llm_id` in `/assessment/<llm_id>`, and the subject dropdown just navigates to another id. The judge is chosen per run: `RunAssessmentRequest.judge_llm_id` is required, and the report stores `judge_llm_id`, `judge_llm_name` and `judge_model`. There is no `.env` judge setting any more. Judge = subject is allowed. The UI shows a warning (self-evaluation bias) and the report gets a "Judge = Subject" badge, but the API does not block it. Reports created before the judge became selectable have no `judge_llm_*` fields (they are `Optional`).
 - **Guardrails are disabled** but kept in the codebase. `services/guardrails.py` is not wired into any route. Don't delete it, and don't wire it back in unless asked. `run_guardrails()` is the entry point for re-enabling it later.
-- **No mock data.** Don't seed fake models or canned replies. If there are no LLMs yet, the UI tells the user to add one on the admin page.
+- **No mock data.** Don't seed fake models or canned replies. If there are no LLMs yet, the UI tells the user to add one on the admin page. The one exception is `./scripts/seed` (`matini/cmd/seed.py`), which the developer runs by hand and the app never runs: it creates three `[ตัวอย่าง]` LLMs whose assessment profiles (context + GOVERN/MAP/MANAGE evidence and files) are written to match rubric level 1, 3 and 5, plus a `[ตัวอย่าง] Judge` LLM. It seeds no reports and no probe answers (the overall score still comes from a real run, so MEASURE varies), and each criterion's evidence text is kept under `MAX_EVIDENCE_CHARS`. The PDFs' stored text comes from `_pdf_src/` because pypdf drops Thai tone marks and upper vowels (`ใช้` → `ใช`), so a real Thai PDF uploaded on the admin page is extracted with that loss. `--reset` soft-deletes the old sample LLMs and their files.
 - There is no auth on any page and CORS is `*`. This is a known limitation.
 
 ## Brython gotchas (already hit)
@@ -70,6 +71,7 @@ poetry env use python3.13 && poetry install   # the system Python is 3.14, so pi
 docker run -d --name matini-mongo -p 27017:27017 mongo:7
 ./scripts/run-api            # PYTHONPATH=. poetry run python -m matini.cmd.api
 ./scripts/run-web
+./scripts/seed [--reset] [--base-url URL] [--model TAG]   # optional sample data, defaults to the Ollama at 172.30.222.240 / llama3.2:3b
 ./scripts/npm run tw         # rebuild Tailwind after editing templates/brython (they're in @source)
 poetry run pytest
 ```
