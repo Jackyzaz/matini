@@ -105,6 +105,32 @@
 
     <!-- LEFT: Results (7 cols) -->
     <div class="lg:col-span-7 flex flex-col gap-6">
+        {% if history %}
+        <div class="bg-white rounded-2xl border border-slate-200/90 px-5 py-3 shadow-xs flex items-center gap-3">
+            <label for="history_select" class="text-[11px] font-semibold text-slate-700 shrink-0"><i class="ph ph-clock-counter-clockwise"></i> ประวัติรายงาน</label>
+            <select id="history_select" class="select select-sm w-full bg-slate-50 border-slate-200 text-xs">
+                {% for h in history %}
+                <option value="{{ h.id }}" {% if h.selected %}selected{% endif %}>{{ h.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        {% if draft %}
+        <div id="draft_card" data-report-id="{{ draft.id }}" class="bg-white rounded-2xl border border-amber-200 p-6 shadow-xs">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold mb-2">
+                <i class="ph ph-pencil-line"></i> ร่างการประเมินโดยมนุษย์
+            </div>
+            {% set scored = draft.criteria_results|selectattr('score', 'ne', none)|list|length %}
+            <p class="text-sm font-bold text-slate-900">ผู้ประเมิน: {{ draft.assessor_name }}</p>
+            <p class="text-xs text-slate-500 mt-1">ให้คะแนนแล้ว {{ scored }}/{{ draft.criteria_results|length }} ข้อ • เริ่มเมื่อ {{ draft.created_date[:16].replace('T', ' ') }} — ผลจะแสดงเมื่อส่งผลการประเมินครบทุกข้อ</p>
+            <div class="flex items-center gap-2 mt-4">
+                <a href="/assessment/{{ llm.id }}/manual/{{ draft.id }}" class="btn btn-sm btn-primary"><i class="ph ph-play"></i> ประเมินต่อ</a>
+                <button type="button" id="discard_draft" class="btn btn-sm btn-ghost text-rose-600"><i class="ph ph-trash"></i> ทิ้งร่าง</button>
+            </div>
+        </div>
+        {% endif %}
+
         {% if report %}
         <!-- Per-function score summary -->
         <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs">
@@ -126,10 +152,15 @@
                 {% endfor %}
             </div>
             <p class="text-[11px] text-slate-400 mt-4">
+                {% if report.judge_type == 'human' %}
+                ผู้ประเมิน: <span class="badge badge-info badge-soft badge-sm"><i class="ph ph-user"></i> มนุษย์</span> <strong class="text-slate-500">{{ report.assessor_name }}</strong>
+                {% else %}
                 Judge:
                 {% if report.judge_llm_name %}<strong class="text-slate-500">{{ report.judge_llm_name }}</strong> (<span class="font-mono">{{ report.judge_model }}</span>){% else %}<span class="font-mono">{{ report.judge_model }}</span>{% endif %}
                 {% if report.judge_llm_id and report.judge_llm_id == report.llm_id %}<span class="badge badge-warning badge-soft badge-sm ml-1">Judge = Subject</span>{% endif %}
-                • รันเมื่อ {{ report.created_date }}
+                {% endif %}
+                • {{ 'ประเมินเมื่อ' if report.judge_type == 'human' else 'รันเมื่อ' }} {{ (report.completed_date or report.created_date)[:16].replace('T', ' ') }}
+                {% if report.profile_updated_date %}• ใช้ข้อมูลการประเมินที่บันทึกเมื่อ {{ report.profile_updated_date[:16].replace('T', ' ') }}{% endif %}
             </p>
         </div>
 
@@ -157,13 +188,73 @@
                         {% endif %}
                     </div>
                     <p class="text-xs text-slate-600 mb-2">{{ c.guiding_question }}</p>
+                    {% if r and (r.evidence or r.evidence_notes) %}
+                    <div class="mb-2 p-2.5 rounded-lg bg-white/70 border border-slate-200/60 text-xs text-slate-700 space-y-1.5">
+                        {% if r.evidence %}
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="font-semibold">สถานะที่ผู้กรอกระบุ:</span>
+                            <span class="badge badge-sm badge-soft {{ 'badge-success' if r.evidence.status == 'implemented' else 'badge-warning' if r.evidence.status == 'partial' else 'badge-error' if r.evidence.status == 'not_implemented' else 'badge-ghost' }}">{{ status_labels.get(r.evidence.status, r.evidence.status) }}</span>
+                            <span class="text-[10px] text-slate-400">(self-declared)</span>
+                        </div>
+                        {% endif %}
+                        {% if r.evidence_notes %}<p class="whitespace-pre-line"><strong class="font-semibold">บันทึก:</strong> {{ r.evidence_notes }}</p>{% endif %}
+                        {% if r.evidence and r.evidence["items"] %}
+                        <ul class="space-y-1">
+                            {% for item in r.evidence["items"] %}
+                            <li class="flex items-baseline gap-1.5">
+                                <span class="badge badge-xs badge-ghost shrink-0">{{ kind_labels.get(item.kind, item.kind) }}</span>
+                                <span>
+                                    {% if item.kind == 'document' and item.file_id %}
+                                    <a href="{{ api_url }}/api/evidence-files/{{ item.file_id }}/download" target="_blank" class="text-indigo-600 hover:underline">
+                                        <i class="ph ph-download-simple"></i> {{ item.title or r.evidence_files.get(item.file_id, 'ไฟล์แนบ') }}</a>
+                                    {% if item.title and r.evidence_files.get(item.file_id) %}<span class="font-mono text-[10px] text-slate-400">{{ r.evidence_files.get(item.file_id) }}</span>{% endif %}
+                                    {% elif item.kind == 'link' and item.url %}
+                                    <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">{{ item.title or item.url }}</a>
+                                    {% else %}
+                                    {{ item.title }}
+                                    {% endif %}
+                                    {% if item.doc_date %}<span class="text-[10px] text-slate-400">({{ item.doc_date }})</span>{% endif %}
+                                    {% if item.excerpt %}<span class="block text-slate-500">{{ item.excerpt|truncate(200) }}</span>{% endif %}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     {% if r and r.rationale %}
                     <p class="text-xs text-slate-800 bg-white/70 rounded-lg p-2.5 border border-slate-200/60">
-                        <strong class="font-semibold">เหตุผล:</strong> {{ r.rationale }}
+                        <strong class="font-semibold">เหตุผล{% if report.judge_type == 'human' %}ของผู้ประเมิน{% endif %}:</strong> {{ r.rationale }}
                     </p>
                     {% endif %}
                     {% if r and r.judge_error %}
                     <p class="text-xs text-rose-700 mt-2"><i class="ph ph-warning-circle"></i> {{ r.judge_error }}</p>
+                    {% endif %}
+                    {% if r and r.probes %}
+                    <details class="mt-2">
+                        <summary class="text-[11px] font-semibold text-slate-500 cursor-pointer">ดูผลการทดสอบกับโมเดล ({{ r.probes|length }} prompt)</summary>
+                        <div class="space-y-2 mt-1.5">
+                            {% for probe in r.probes %}
+                            <div class="rounded-lg border border-slate-200 bg-white/80 p-2.5 text-[11px]">
+                                <div class="font-mono text-slate-500 whitespace-pre-wrap">{% if probe.source == 'custom' %}<span class="badge badge-xs badge-info badge-soft mr-1">เพิ่มเอง</span>{% endif %}{{ probe.prompt }}</div>
+                                {% if probe.response %}<pre class="font-mono whitespace-pre-wrap bg-slate-900 text-slate-100 rounded-lg p-2.5 mt-1.5">{{ probe.response }}</pre>{% endif %}
+                                {% if probe.error %}<p class="text-rose-700 mt-1"><i class="ph ph-warning-circle"></i> {{ probe.error }}</p>{% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+                    {% if r and r.criterion.rubric %}
+                    <details class="mt-2">
+                        <summary class="text-[11px] font-semibold text-slate-500 cursor-pointer">ดู rubric</summary>
+                        <ol class="mt-1.5 space-y-1 text-[11px]">
+                            {% for level in r.criterion.rubric %}
+                            <li class="rounded-md px-2 py-1 {{ 'bg-indigo-50 border border-indigo-200 font-semibold text-indigo-900' if level.score == r.score else 'text-slate-500' }}">
+                                <span class="font-mono">{{ level.score }}</span> • {{ level.label }} — {{ level.description }}
+                            </li>
+                            {% endfor %}
+                        </ol>
+                    </details>
                     {% endif %}
                     {% if r and r.probe_transcript %}
                     <details class="mt-2">
@@ -177,11 +268,11 @@
         </div>
         {% endif %}
         {% endfor %}
-        {% else %}
+        {% elif not draft %}
         <div class="bg-white rounded-2xl border border-slate-200/90 p-10 text-center shadow-xs">
             <i class="ph ph-clipboard-text text-4xl text-slate-300 mb-2"></i>
             <p class="text-sm font-semibold text-slate-700">ยังไม่มีผลการประเมิน</p>
-            <p class="text-xs text-slate-400 mt-1">กรอกแบบฟอร์มด้านขวาแล้วกด "Run NIST AI RMF Assessment" เพื่อเริ่มต้น</p>
+            <p class="text-xs text-slate-400 mt-1">กรอกข้อมูลการประเมินของ LLM นี้ในหน้า Admin (ถ้ามี) แล้วกด "Run NIST AI RMF Assessment" ทางด้านขวาเพื่อเริ่มต้น</p>
         </div>
         {% endif %}
     </div>
@@ -207,25 +298,59 @@
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="judge_select">ผู้ตัดสิน (Judge)</label>
-                    <select id="judge_select" class="select select-sm w-full bg-slate-50 border-slate-200 text-xs" {% if not judge_options %}disabled{% endif %}>
-                        {% for l in judge_options %}
-                        <option value="{{ l.id }}" data-model-name="{{ l.model_name }}" data-base-url="{{ l.base_url }}">{{ llm_label(l) }}</option>
-                        {% endfor %}
+                    <select id="judge_select" class="select select-sm w-full bg-slate-50 border-slate-200 text-xs">
+                        {% if judge_options %}
+                        <optgroup label="AI (LLM)">
+                            {% for l in judge_options %}
+                            <option value="{{ l.id }}" data-model-name="{{ l.model_name }}" data-base-url="{{ l.base_url }}">{{ llm_label(l) }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                        <optgroup label="มนุษย์">
+                            <option value="manual">มนุษย์ประเมิน (Manual)</option>
+                        </optgroup>
                     </select>
                 </div>
             </div>
             {% if not judge_options %}
-            <div role="alert" class="alert alert-error alert-soft text-xs py-2">ยังไม่มี LLM ที่เปิดใช้งาน — <a href="/admin/" class="underline font-semibold">เพิ่ม LLM ในหน้า Admin</a> ก่อน</div>
+            <div role="alert" class="alert alert-info alert-soft text-xs py-2">ยังไม่มี LLM ที่เปิดใช้งานเป็นผู้ตัดสิน AI — เลือก "มนุษย์ประเมิน" ได้ หรือ <a href="/admin/" class="underline font-semibold">เพิ่ม LLM ในหน้า Admin</a></div>
             {% endif %}
+            <div id="manual_fields" class="hidden space-y-2">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="assessor_name">ชื่อผู้ประเมิน</label>
+                    <input id="assessor_name" placeholder="เช่น ชื่อ-นามสกุลของคุณ"
+                        class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                </div>
+                <p class="text-[11px] text-slate-500">ระบบจะส่งคำถามทดสอบ MEASURE ไปที่โมเดลก่อน แล้วพาไปหน้าประเมิน: อ่านเอกสารหลักฐาน (GOVERN / MAP / MANAGE) และคำตอบของโมเดล (MEASURE) แล้วให้คะแนนตาม rubric ทีละเกณฑ์</p>
+            </div>
             <div id="same_model_warning" role="alert" class="hidden alert alert-warning alert-soft text-xs py-2">
                 <i class="ph ph-warning"></i>
                 <span>ผู้ตัดสินและผู้ถูกประเมินเป็นโมเดลเดียวกัน อาจเกิด self-evaluation bias (โมเดลตัดสินตัวเอง) — ยังรันต่อได้</span>
             </div>
 
-            <div>
-                <label class="block text-[11px] font-semibold text-slate-700 mb-1.5">บริบทของระบบ (system context)</label>
-                <textarea name="system_context" rows="3" placeholder="อธิบายบริบทการใช้งาน กลุ่มผู้ใช้ แหล่งข้อมูล ฯลฯ ที่ผู้ตัดสินควรรู้..."
-                    class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">{{ report.system_context if report else '' }}</textarea>
+            <!-- Assessment profile summary: the evidence itself is edited in Admin -->
+            <div id="profile_card" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-800 flex items-center gap-1.5"><i class="ph ph-folder-open text-indigo-600"></i> ข้อมูลการประเมิน (Assessment Profile)</h4>
+                        <p class="text-[11px] text-slate-500 mt-0.5">
+                            {% if profile_summary.updated_date %}แก้ไขล่าสุด {{ profile_summary.updated_date[:16].replace('T', ' ') }}{% else %}ยังไม่เคยบันทึก{% endif %}
+                        </p>
+                    </div>
+                    <a href="/admin/?profile={{ llm.id }}" class="btn btn-xs btn-outline shrink-0"><i class="ph ph-pencil-simple"></i> แก้ไขข้อมูลการประเมิน</a>
+                </div>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                    <div class="flex justify-between"><span class="text-slate-600">บริบทระบบ</span><span class="font-mono text-slate-500">{{ profile_summary.context_filled }}/6</span></div>
+                    {% for f in profile_summary.functions %}
+                    <div class="flex justify-between"><span class="text-slate-600">{{ f.name }}</span><span class="font-mono {{ 'text-emerald-600 font-semibold' if f.total and f.filled == f.total else 'text-slate-500' }}">{{ f.filled }}/{{ f.total }}</span></div>
+                    {% endfor %}
+                </div>
+                {% if profile_summary.is_empty %}
+                <div role="alert" class="alert alert-warning alert-soft text-xs py-2">
+                    <i class="ph ph-warning"></i>
+                    <span>ยังไม่มีข้อมูลการประเมินของ LLM นี้ — ผู้ตัดสินจะไม่มีหลักฐาน ผลที่ได้จึงมักออกมาเป็นความเสี่ยงสูงตามหลัก NIST AI RMF</span>
+                </div>
+                {% endif %}
             </div>
 
             <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
@@ -233,32 +358,9 @@
                 ทดสอบพฤติกรรมจริงของโมเดลอัตโนมัติสำหรับเกณฑ์ในหมวด MEASURE (ใช้เวลานานขึ้น)
             </label>
 
-            {% for fn in functions %}
-            {% set items = grouped_criteria.get(fn, []) %}
-            {% if items %}
-            <div class="pt-3 border-t border-slate-100">
-                <h4 class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                    <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
-                </h4>
-                <div class="space-y-3">
-                    {% for c in items %}
-                    <div>
-                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">
-                            {{ c.nist_category }} — {{ c.title }}
-                            {% if c.probe_prompt %}<span class="text-violet-600 font-normal">(มี auto-probe)</span>{% endif %}
-                        </label>
-                        <textarea name="evidence__{{ c.id }}" rows="2" placeholder="หลักฐาน/บันทึกของคุณสำหรับเกณฑ์นี้ (เว้นว่างได้)"
-                            class="w-full text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">{{ results_by_id.get(c.id, {}).get('evidence_notes', '') }}</textarea>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            {% endfor %}
-
-            <button type="submit" id="run_btn" {% if not judge_options %}disabled{% endif %}
+            <button type="submit" id="run_btn"
                 class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-all shadow-xs hover:shadow-md flex items-center justify-center gap-1.5">
-                <i class="ph ph-play"></i> Run NIST AI RMF Assessment
+                <i class="ph ph-play"></i> <span id="run_btn_text">Run NIST AI RMF Assessment</span>
             </button>
             <p class="text-[10px] text-slate-400 text-center">
                 ต้องมี Ollama รันอยู่ — ดู docs/nist-rmf-poc-guide.md

@@ -2,7 +2,7 @@
 
 import importlib
 
-__all__ = ["assessment", "bases", "conversations", "llms"]
+__all__ = ["assessment", "bases", "conversations", "evidence", "llms"]
 
 
 def __getattr__(name: str):

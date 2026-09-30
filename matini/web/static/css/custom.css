@@ -110,3 +110,19 @@ code, pre {
 /* Blinking caret shown while a reply is streaming */
 .streaming-caret::after { content: "▍"; animation: caret-blink 1s steps(2) infinite; color: #6366f1; }
 @keyframes caret-blink { 50% { opacity: 0; } }
+
+/* Fix: <select class="select"> — arrow overlapping the selected text.
+   daisyUI 5 switches selects to `appearance: base-select`; in some Chrome versions the
+   right padding is then not reserved for the arrow. Use the classic select rendering
+   (native popup) so the padding is always respected, and truncate long labels.
+   Kept here, not in app.css, because tw:watch regenerates app.css. */
+select.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 2.5rem;
+  text-overflow: ellipsis;
+  background-position: calc(100% - 18px) calc(1px + 50%), calc(100% - 14.1px) calc(1px + 50%);
+}
+select.select::picker(select) {
+  appearance: none;
+}

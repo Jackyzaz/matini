@@ -11,6 +11,28 @@ window.matini = {
     return div.innerHTML.replace(/\n/g, "<br>");
   },
 
+  // Upload one File as multipart/form-data (field "file"). common.request() can only send JSON.
+  // Callbacks: onOk(rawResponseText) on success, onErr(message) otherwise; exactly one is called.
+  async uploadFile(url, file, onOk, onErr) {
+    let text = null;
+    let failure = null;
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const resp = await fetch(url, { method: "POST", body: form });
+      text = await resp.text();
+      if (!resp.ok) {
+        let detail = resp.statusText;
+        try { detail = JSON.parse(text).detail || detail; } catch (e) {}
+        failure = typeof detail === "string" ? detail : JSON.stringify(detail);
+      }
+    } catch (e) {
+      failure = "ติดต่อ API ไม่ได้";
+    }
+    if (failure !== null) onErr(failure);
+    else onOk(text);
+  },
+
   // POST JSON and read an NDJSON response line by line.
   // Callbacks: onLine(rawLineString) for each non-empty line, onEnd(errorMessageOrNull) exactly once.
   async streamNdjson(url, body, onLine, onEnd) {

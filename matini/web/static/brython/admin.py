@@ -1,5 +1,6 @@
 from browser import bind, document, html, window
 
+import assessment_profile
 from common import error_detail, request, show_toast
 
 editing = {"llm": None}  # the LLM being edited, or None when the form adds a new one
@@ -60,6 +61,7 @@ def render_table(data):
         name.text = llm["name"]
         actions = html.DIV(Class="flex items-center justify-end gap-0.5")
         actions <= html.A(html.I(Class="ph ph-clipboard-text"), href="/assessment/" + llm["id"], Class="p-1.5 rounded-lg text-sm hover:bg-slate-100 text-slate-600", title="ประเมิน NIST AI RMF")
+        actions <= action_button("ph-folder-open", "ข้อมูลการประเมิน", make_open_profile(llm))
         actions <= action_button("ph-pencil-simple", "แก้ไข", make_edit(llm))
         actions <= action_button("ph-plugs-connected", "ทดสอบการเชื่อมต่อ", make_test(llm))
         actions <= action_button("ph-toggle-left" if active else "ph-toggle-right", "ปิดใช้งาน" if active else "เปิดใช้งาน", make_toggle(llm))
@@ -90,6 +92,13 @@ def set_form_mode(llm):
         document["f_cancel"].classList.remove("hidden")
     else:
         document["f_cancel"].classList.add("hidden")
+
+
+def make_open_profile(llm):
+    def handler(ev):
+        assessment_profile.open_profile(llm["id"])
+
+    return handler
 
 
 def make_edit(llm):
@@ -136,7 +145,7 @@ def make_test(llm):
 def make_toggle(llm):
     def handler(ev):
         # resend every field (the update endpoint replaces them all), flipping only the status
-        body = {k: v for k, v in llm.items() if k != "id"}
+        body = {k: v for k, v in llm.items() if k not in ("id", "assessment_profile")}
         body["status"] = "inactive" if llm["status"] == "active" else "active"
         request("put", "/api/llms/update/" + llm["id"], lambda _: load(), data=body)
 
@@ -189,5 +198,13 @@ def set_defaults(data):
     document["f_base_url"].placeholder = data["ollama_base_url"]
 
 
+def open_requested_profile():
+    """/admin/?profile=<llm_id> opens that LLM's profile straight away (linked from the Assessment page)."""
+    for part in window.location.search.lstrip("?").split("&"):
+        if part.startswith("profile=") and len(part) > len("profile="):
+            assessment_profile.open_profile(part[len("profile="):])
+
+
 request("get", "/api/llms/defaults", set_defaults)
 load()
+open_requested_profile()

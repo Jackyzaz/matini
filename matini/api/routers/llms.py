@@ -10,6 +10,7 @@ from fastapi import status as http_status
 from matini import models, schemas
 from matini.api.core.config import settings
 from matini.api.services import local_llm
+from matini.api.services.nist_rmf import get_criteria
 
 router = APIRouter(prefix="/llms", tags=["LLMs"])
 
@@ -62,6 +63,41 @@ async def update(llm_id: PydanticObjectId, form: schemas.llms.CreateUpdateLLM) -
     llm = await get_llm_or_404(llm_id)
     for key, value in form.model_dump().items():
         setattr(llm, key, value)
+    llm.updated_date = datetime.datetime.now()
+    await llm.save()
+    return llm
+
+
+@router.put("/update/{llm_id}/profile")
+async def update_profile(llm_id: PydanticObjectId, form: schemas.evidence.AssessmentProfile) -> schemas.llms.LLM:
+    """Replace the LLM's whole assessment profile (context + per-criterion evidence)."""
+    llm = await get_llm_or_404(llm_id)
+
+    known = {c.id for c in get_criteria()}
+    unknown = sorted(set(form.criteria) - known)
+    if unknown:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unknown criterion id: {', '.join(unknown)}"
+        )
+
+    items = [item for evidence in form.criteria.values() for item in evidence.items]
+    if any(item.kind == "document" and item.file_id is None for item in items):
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Document evidence needs an uploaded file"
+        )
+    file_ids = {item.file_id for item in items if item.file_id is not None}
+    if file_ids:
+        owned = await models.EvidenceFile.find(
+            {"_id": {"$in": list(file_ids)}, "llm_id": llm.id, "status": {"$ne": "delete"}}
+        ).to_list()
+        missing = file_ids - {f.id for f in owned}
+        if missing:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"File not found for this LLM: {', '.join(str(i) for i in sorted(missing))}",
+            )
+
+    llm.assessment_profile = form.model_copy(update={"updated_date": datetime.datetime.now()})
     llm.updated_date = datetime.datetime.now()
     await llm.save()
     return llm

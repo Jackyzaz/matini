@@ -1,0 +1,197 @@
+{% extends "base/base_layout.html" %}
+
+{% block title %}ประเมินโดยมนุษย์ - {{ report.llm_name }}{% endblock %}
+
+{% block content %}
+
+{% macro fn_icon(fn) -%}
+    {%- if fn == 'GOVERN' -%} ph-scales
+    {%- elif fn == 'MAP' -%} ph-compass
+    {%- elif fn == 'MEASURE' -%} ph-ruler
+    {%- else -%} ph-flow-arrow
+    {%- endif -%}
+{%- endmacro %}
+
+{% set results = report.criteria_results %}
+
+<div id="manual_app" data-llm-id="{{ report.llm_id }}" data-report-id="{{ report.id }}">
+
+    <!-- Breadcrumb + header -->
+    <div class="mb-6">
+        <div class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
+            <a href="/assessment/{{ report.llm_id }}" class="hover:text-indigo-600 flex items-center gap-1 transition-colors">
+                <i class="ph ph-arrow-left"></i> {{ report.llm_name }}
+            </a>
+            <span>/</span>
+            <span class="text-slate-900 font-semibold">ประเมินโดยมนุษย์</span>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200/80 text-sky-700 text-[11px] font-semibold mb-2">
+                    <i class="ph ph-user"></i> <span>Human Assessment</span>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900">{{ report.llm_name }} <span class="text-sm font-mono font-normal text-slate-400">{{ report.subject_model }}</span></h1>
+                <p class="text-xs text-slate-500 mt-1">ผู้ประเมิน: <strong class="text-slate-700">{{ report.assessor_name }}</strong> • ข้อมูลหลักฐานเป็นสำเนา ณ ตอนเริ่มประเมิน • บันทึกทีละข้อ กลับมาทำต่อได้จากประวัติรายงาน</p>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <div class="text-right">
+                    <div class="text-[11px] text-slate-500">ให้คะแนนแล้ว</div>
+                    <div class="text-lg font-bold font-mono text-slate-900"><span id="scored_count">0</span>/{{ results|length }}</div>
+                </div>
+                <button type="button" id="complete_btn" disabled class="btn btn-sm btn-primary"><i class="ph ph-paper-plane-tilt"></i> ส่งผลการประเมิน</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs mb-6 flex flex-wrap gap-x-6 gap-y-3">
+        {% for fn in functions %}
+        <div>
+            <div class="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}</div>
+            <div class="flex gap-1.5">
+                {% for r in results %}{% if r.criterion.nist_function == fn %}
+                <button type="button" data-step="{{ loop.index0 }}" data-criterion-id="{{ r.criterion.id }}"
+                    title="{{ r.criterion.nist_category }} — {{ r.criterion.title }}"
+                    class="step w-9 h-9 rounded-lg border border-slate-200 bg-white text-xs font-mono font-semibold text-slate-600 hover:border-indigo-400 transition-colors">{{ loop.index }}</button>
+                {% endif %}{% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- One panel per criterion; brython/manual_assessment.py shows the current one -->
+    {% for r in results %}
+    {% set c = r.criterion %}
+    <section data-criterion-id="{{ c.id }}" data-function="{{ c.nist_function }}" class="criterion-panel hidden">
+        <div class="mb-4">
+            <div class="text-[11px] font-mono text-slate-400">{{ loop.index }}/{{ results|length }} • {{ c.nist_category }} • {{ c.ethics_dimension }}</div>
+            <h2 class="text-lg font-bold text-slate-900">{{ c.title }}</h2>
+            <p class="text-sm text-slate-600 mt-1">{{ c.guiding_question }}</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- LEFT: what to read -->
+            <div class="lg:col-span-7 flex flex-col gap-4">
+                {% if c.nist_function == 'MEASURE' %}
+                <div class="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+                    <h3 class="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2"><i class="ph ph-chats-circle text-indigo-600"></i> คำถามทดสอบและคำตอบของโมเดล</h3>
+                    <p class="text-[11px] text-slate-500 mb-3">อ่านคำตอบของโมเดลทุกข้อแล้วให้คะแนนรวมของเกณฑ์นี้ (รวมข้อที่คุณเพิ่มเองด้วย)</p>
+                    <div class="probes space-y-3" data-probes="{{ c.id }}"></div>
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="custom_{{ c.id }}">เพิ่ม prompt ทดสอบเอง</label>
+                        <textarea id="custom_{{ c.id }}" rows="2" placeholder="พิมพ์คำถามหรือคำสั่งที่ต้องการทดสอบกับโมเดล…"
+                            class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"></textarea>
+                        <div class="flex items-center gap-2 mt-2">
+                            <button type="button" data-add-probe="{{ c.id }}" class="btn btn-sm btn-outline"><i class="ph ph-paper-plane-right"></i> ส่งให้โมเดล</button>
+                            <span class="text-[10px] text-slate-400">prompt นี้เก็บไว้ในรายงานนี้เท่านั้น</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
+                    <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <i class="ph ph-folder-open text-indigo-600"></i>
+                        {% if c.nist_function == 'MEASURE' %}หลักฐานเสริม (เช่น ผล benchmark จากภายนอก){% else %}หลักฐานที่ผู้กรอกแนบ{% endif %}
+                    </h3>
+
+                    {% if report.system_context and c.nist_function != 'MEASURE' %}
+                    <details class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                        <summary class="font-semibold text-slate-600 cursor-pointer">บริบทของระบบ</summary>
+                        <p class="whitespace-pre-line text-slate-700 mt-2">{{ report.system_context }}</p>
+                    </details>
+                    {% endif %}
+
+                    {% if r.evidence %}
+                    <div class="text-xs text-slate-700 flex items-center gap-1.5 flex-wrap">
+                        <span class="font-semibold">สถานะที่ผู้กรอกระบุ:</span>
+                        <span class="badge badge-sm badge-soft {{ 'badge-success' if r.evidence.status == 'implemented' else 'badge-warning' if r.evidence.status == 'partial' else 'badge-error' if r.evidence.status == 'not_implemented' else 'badge-ghost' }}">{{ status_labels.get(r.evidence.status, r.evidence.status) }}</span>
+                        <span class="text-[10px] text-slate-400">(self-declared — ตรวจสอบจากหลักฐานด้วยตัวเอง)</span>
+                    </div>
+                    {% if r.evidence.notes %}<p class="text-xs text-slate-700 whitespace-pre-line"><strong class="font-semibold">บันทึกของผู้กรอก:</strong> {{ r.evidence.notes }}</p>{% endif %}
+                    {% endif %}
+
+                    {% if r.evidence and r.evidence["items"] %}
+                    <ul class="space-y-2">
+                        {% for item in r.evidence["items"] %}
+                        <li class="rounded-lg border border-slate-200 p-3 text-xs">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="badge badge-xs badge-ghost">{{ kind_labels.get(item.kind, item.kind) }}</span>
+                                <span class="font-semibold text-slate-800">{{ item.title or (r.evidence_files.get(item.file_id) if item.file_id else item.url) or '-' }}</span>
+                                {% if item.doc_date %}<span class="text-[10px] text-slate-400">({{ item.doc_date }})</span>{% endif %}
+                                {% if item.kind == 'document' and item.file_id %}
+                                <button type="button" data-open-file="{{ item.file_id }}" data-filename="{{ r.evidence_files.get(item.file_id, item.title) }}" class="btn btn-xs btn-outline ml-auto"><i class="ph ph-eye"></i> เปิดเอกสาร</button>
+                                {% elif item.kind == 'link' and item.url %}
+                                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline ml-auto"><i class="ph ph-arrow-square-out"></i> เปิดลิงก์</a>
+                                {% endif %}
+                            </div>
+                            {% if item.kind == 'link' and item.url %}<div class="font-mono text-[10px] text-slate-400 mt-1 break-all">{{ item.url }}</div>{% endif %}
+                            {% if item.excerpt %}<p class="text-slate-600 whitespace-pre-line mt-2">{{ item.excerpt }}</p>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% elif c.nist_function != 'MEASURE' %}
+                    <div role="alert" class="alert alert-warning alert-soft text-xs py-2"><i class="ph ph-warning"></i><span>ไม่มีหลักฐานแนบสำหรับเกณฑ์นี้ — พิจารณาให้คะแนนตามหลักฐานที่มีจริง</span></div>
+                    {% else %}
+                    <p class="text-xs text-slate-400">ไม่มีหลักฐานเสริม</p>
+                    {% endif %}
+
+                    {% if not r.evidence and r.evidence_notes %}<p class="text-xs text-slate-700 whitespace-pre-line">{{ r.evidence_notes }}</p>{% endif %}
+
+                    <!-- Document viewer (filled by brython): PDF in an iframe, other files as extracted text -->
+                    <div class="viewer hidden rounded-xl border border-indigo-200 bg-indigo-50/30 p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="ph ph-file-text text-indigo-600"></i>
+                            <span class="viewer-title text-xs font-semibold text-slate-800 truncate"></span>
+                            <a class="viewer-download text-[11px] text-indigo-600 hover:underline ml-auto shrink-0" target="_blank"><i class="ph ph-download-simple"></i> ดาวน์โหลด</a>
+                            <button type="button" class="viewer-text btn btn-xs btn-ghost hidden">แสดงข้อความที่ดึงได้</button>
+                            <button type="button" class="viewer-close btn btn-xs btn-ghost btn-circle" title="ปิด"><i class="ph ph-x"></i></button>
+                        </div>
+                        <div class="viewer-body"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: score against the rubric -->
+            <div class="lg:col-span-5">
+                <div class="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4 lg:sticky lg:top-20">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2"><i class="ph ph-list-checks text-indigo-600"></i> Rubric — เลือกระดับที่ตรงที่สุด</h3>
+                        {% if c.nist_function == 'MEASURE' %}<p class="text-[11px] text-slate-500 mt-1">ดูภาพรวมจากคำตอบทุก prompt ไม่ใช่เฉพาะข้อใดข้อหนึ่ง</p>{% endif %}
+                    </div>
+                    <div class="space-y-2">
+                        {% for level in c.rubric %}
+                        <label class="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-indigo-300 has-checked:border-indigo-500 has-checked:bg-indigo-50 transition-colors">
+                            <input type="radio" name="score_{{ c.id }}" value="{{ level.score }}" class="radio radio-primary radio-sm mt-0.5" {% if r.score == level.score %}checked{% endif %}>
+                            <span class="text-xs">
+                                <span class="font-bold text-slate-900"><span class="font-mono">{{ level.score }}</span> • {{ level.label }}</span>
+                                <span class="block text-slate-600 mt-0.5">{{ level.description }}</span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="rationale_{{ c.id }}">เหตุผล / ข้อสังเกต <span class="font-normal text-slate-400">(ไม่บังคับ)</span></label>
+                        <textarea id="rationale_{{ c.id }}" rows="3" class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">{{ r.rationale }}</textarea>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-save="{{ c.id }}" class="btn btn-sm btn-primary flex-1"><i class="ph ph-floppy-disk"></i> <span class="save-text">{{ 'บันทึกและไปข้อถัดไป' if not loop.last else 'บันทึก' }}</span></button>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                        <button type="button" data-prev class="text-slate-500 hover:text-indigo-600 disabled:opacity-40"><i class="ph ph-caret-left"></i> ข้อก่อนหน้า</button>
+                        <button type="button" data-next class="text-slate-500 hover:text-indigo-600 disabled:opacity-40">ข้อถัดไป <i class="ph ph-caret-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endfor %}
+
+    <script type="application/json" id="report_data">{{ report|tojson }}</script>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/python" src="{{ url_for('static', filename='brython/manual_assessment.py') }}"></script>
+{% endblock %}

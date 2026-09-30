@@ -49,8 +49,8 @@ def error_detail(req):
     return f"HTTP {req.status}" if req.status else "ติดต่อ API ไม่ได้"
 
 
-def request(method, path, on_ok, data=None, on_error=None):
-    """Call the API. on_ok receives the parsed JSON body; errors default to a toast."""
+def request(method, path, on_ok, data=None, on_error=None, timeout=30):
+    """Call the API. on_ok receives the parsed JSON body; errors default to a toast. `timeout` is in seconds."""
 
     import json
 
@@ -63,7 +63,7 @@ def request(method, path, on_ok, data=None, on_error=None):
             show_toast(error_detail(req), True)
 
     fn = getattr(ajax, method)
-    kwargs = {"oncomplete": done, "timeout": 30}
+    kwargs = {"oncomplete": done, "timeout": timeout}
     if method == "get":
         # Brython would append "?<timestamp>" itself, which breaks URLs that already have
         # a query string. Cache-bust with a proper param instead.

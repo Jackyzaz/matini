@@ -9,6 +9,7 @@ import pymongo
 from matini.models.llms import LLM
 from matini.models.conversations import Conversation
 from matini.models.assessments import Assessment
+from matini.models.evidence import EvidenceFile
 
 
 async def gather_documents() -> Sequence[Type[beanie.Document]]:

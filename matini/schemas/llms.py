@@ -3,6 +3,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from matini.schemas import bases
+from matini.schemas.evidence import AssessmentProfile
 
 
 class BaseLLM(BaseModel):
@@ -22,7 +23,9 @@ class CreateUpdateLLM(BaseLLM):
 
 
 class LLM(bases.BaseSchema, BaseLLM):
-    pass
+    # Deliberately not in CreateUpdateLLM: editing or toggling an LLM must not touch the profile
+    # (it has its own endpoint, PUT /llms/update/{id}/profile).
+    assessment_profile: AssessmentProfile = Field(default_factory=AssessmentProfile)
 
 
 class LLMList(BaseModel):
