@@ -30,9 +30,13 @@ async def get_job(job_id: str) -> schemas.assessment.AssessmentJob:
 async def run(
     llm_id: PydanticObjectId, form: schemas.assessment.RunAssessmentRequest
 ) -> schemas.assessment.AssessmentJob:
-    """Start an assessment of a registered LLM in the background; poll /jobs/{job_id} for progress."""
+    """Start an assessment of a registered LLM in the background; poll /jobs/{job_id} for progress.
+
+    `llm_id` is the LLM being assessed; `form.judge_llm_id` is the registered LLM that scores it.
+    """
     llm = await get_llm_or_404(llm_id)
-    return assessment_service.start_assessment(llm, form)
+    judge_llm = await get_llm_or_404(form.judge_llm_id)
+    return assessment_service.start_assessment(llm, judge_llm, form)
 
 
 @router.get("/{llm_id}")

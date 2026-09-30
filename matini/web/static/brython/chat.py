@@ -1,5 +1,3 @@
-import json
-
 from browser import bind, document, html, window
 from javascript import NULL
 
@@ -239,6 +237,8 @@ def stream_reply(conversation_id, content, llm_id):
     parts = []
 
     def on_line(line):
+        import json  # lazy on purpose: see the "Brython gotchas" note in CLAUDE.md
+
         data = json.loads(line)
         if "delta" in data:
             parts.append(data["delta"])

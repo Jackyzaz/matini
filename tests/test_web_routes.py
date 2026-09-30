@@ -46,11 +46,14 @@ def test_assessment_page_has_progress_bar(web_client, monkeypatch):
         "id": "g1", "nist_function": "GOVERN", "nist_category": "GOVERN 1",
         "ethics_dimension": "Bias & Fairness", "title": "Policies", "guiding_question": "?", "probe_prompt": None,
     }
-    llm = {"id": "abc", "name": "Test LLM", "provider": "ollama", "model_name": "llama3.1", "parameter_size_b": 8.0}
+    llm = {"id": "abc", "name": "Test LLM", "provider": "ollama", "model_name": "llama3.1", "base_url": "", "parameter_size_b": 8.0}
+    judge = {"id": "def", "name": "Judge LLM", "provider": "ollama", "model_name": "qwen2.5:14b", "base_url": "", "parameter_size_b": 14}
 
     def fake_get(url, timeout=None):
         if url.endswith("/api/llms/abc"):
             return FakeResponse(200, llm)
+        if url.endswith("/api/llms"):
+            return FakeResponse(200, {"llms": [llm, judge]})
         if url.endswith("/api/assessment/criteria"):
             return FakeResponse(200, [criterion])
         return FakeResponse(404, {})
@@ -59,6 +62,11 @@ def test_assessment_page_has_progress_bar(web_client, monkeypatch):
     html = web_client.get("/assessment/abc").data.decode("utf-8")
     assert 'id="progress_bar"' in html
     assert ">8B</span>" in html  # parameter-size badge
+    # subject + judge dropdowns, fed from the registered LLMs
+    assert 'id="subject_select"' in html and 'id="judge_select"' in html
+    assert '<option value="abc" data-model-name="llama3.1" data-base-url="" selected>' in html
+    assert "Judge LLM (qwen2.5:14b) · 14B" in html
+    assert 'id="same_model_warning"' in html
     assert 'data-llm-id="abc"' in html
     assert "assessment.py" in html
 

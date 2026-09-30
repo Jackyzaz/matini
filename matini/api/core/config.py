@@ -19,13 +19,10 @@ class Settings(BaseSettings):
         return sanitize_mongo_uri(v)
 
     # Default Ollama endpoint. Used as an LLM's base_url when the admin form leaves
-    # it empty, and as the endpoint for the assessment judge model. Keep it on
+    # it empty (this applies to assessment subjects and judges alike). Keep it on
     # 127.0.0.1 when Ollama runs on this machine; otherwise point it at the other
     # machine's LAN IP, e.g. OLLAMA_BASE_URL=http://192.168.1.20:11434
     ollama_base_url: str = "http://127.0.0.1:11434"
-
-    # Model that scores each NIST AI RMF criterion in an assessment.
-    ollama_judge_model: str = "llama3.1"
 
     # Ollama on CPU-only or modest hardware can be slow; keep this generous.
     ollama_timeout_s: float = 120.0

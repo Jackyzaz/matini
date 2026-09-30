@@ -65,7 +65,7 @@ class RunAssessmentRequest(BaseModel):
     )
     criteria_inputs: List[CriterionInput] = Field(default_factory=list)
     run_probes: bool = True
-    judge_model: Optional[str] = None  # override settings.ollama_judge_model for this run
+    judge_llm_id: PydanticObjectId  # the registered LLM that scores each criterion
 
 
 class CriterionResult(BaseModel):
@@ -82,7 +82,10 @@ class BaseAssessmentReport(BaseModel):
     llm_id: PydanticObjectId
     llm_name: str
     subject_model: str
-    judge_model: str
+    judge_model: str  # the judge's Ollama model tag
+    # Reports created before the judge became selectable have neither of these.
+    judge_llm_id: Optional[PydanticObjectId] = None
+    judge_llm_name: Optional[str] = None
     system_context: str
     criteria_results: List[CriterionResult]
     function_scores: Dict[str, Optional[float]]

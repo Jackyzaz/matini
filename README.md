@@ -9,7 +9,7 @@
 
 1. **Chat** (หน้าแรก `/`) — คุยหลายรอบ, คำตอบ stream ทีละ token, เลือกโมเดลได้จาก dropdown, ประวัติเก็บใน MongoDB
 2. **Admin** (`/admin/`) — เพิ่ม/เปิด-ปิด/ลบ/ทดสอบ Local LLM (ตอนนี้รองรับ Ollama; Base URL ค่าเริ่มต้นมาจาก `.env`)
-3. **NIST AI RMF Assessment** (`/assessment/<llm_id>`) — ประเมินโมเดล 12 เกณฑ์ด้วย LLM-as-judge รันเบื้องหลังพร้อม **progress bar**
+3. **NIST AI RMF Assessment** (`/assessment/<llm_id>`) — เลือก **AI ที่ถูกประเมิน** และ **ผู้ตัดสิน (judge)** จาก LLM ใน Admin, ประเมิน 12 เกณฑ์ด้วย LLM-as-judge รันเบื้องหลังพร้อม **progress bar** (ถ้าเลือกโมเดลเดียวกันจะขึ้นคำเตือน self-evaluation bias)
 
 > ระบบ Guardrail ถูกปิดไว้ (ไม่ได้ต่อเข้ากับแชท) แต่ยังเก็บโค้ดไว้ที่ `matini/api/services/guardrails.py`
 
@@ -21,7 +21,7 @@
 
 ```bash
 poetry install
-cp .env.example .env          # แล้วแก้ MONGODB_URI / OLLAMA_BASE_URL / OLLAMA_JUDGE_MODEL
+cp .env.example .env          # แล้วแก้ MONGODB_URI / OLLAMA_BASE_URL
 
 docker run -d --name matini-mongo -p 27017:27017 mongo:7   # ถ้ายังไม่มี MongoDB
 

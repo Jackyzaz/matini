@@ -6,8 +6,8 @@ For each criterion this:
      transcript as live evidence.
   2. Builds a judge prompt combining the NIST criterion, the LLM's
      metadata, any evaluator-supplied evidence_notes, and the probe transcript.
-  3. Calls the "judge" model via Ollama and parses a {score, risk_level, rationale}
-     verdict out of it.
+  3. Calls the "judge" LLM (a second registered LLM, chosen per run, at its own
+     base_url) and parses a {score, risk_level, rationale} verdict out of it.
   4. Aggregates per-NIST-function and overall scores/risk levels.
 
 A run takes minutes on modest hardware, so it executes as a background asyncio task
@@ -101,7 +101,7 @@ def get_job(job_id: str) -> Optional[AssessmentJob]:
     return JOBS.get(job_id)
 
 
-def start_assessment(llm: models.LLM, request: RunAssessmentRequest) -> AssessmentJob:
+def start_assessment(llm: models.LLM, judge_llm: models.LLM, request: RunAssessmentRequest) -> AssessmentJob:
     """Register a job and run the assessment in the background. Returns immediately."""
     criteria = get_criteria()
     probes = sum(1 for c in criteria if request.run_probes and c.probe_prompt)
@@ -113,15 +113,17 @@ def start_assessment(llm: models.LLM, request: RunAssessmentRequest) -> Assessme
     )
     JOBS[job.job_id] = job
 
-    task = asyncio.create_task(_run_job(job, llm, request))
+    task = asyncio.create_task(_run_job(job, llm, judge_llm, request))
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return job
 
 
-async def _run_job(job: AssessmentJob, llm: models.LLM, request: RunAssessmentRequest) -> None:
+async def _run_job(
+    job: AssessmentJob, llm: models.LLM, judge_llm: models.LLM, request: RunAssessmentRequest
+) -> None:
     try:
-        report = await run_assessment(llm, request, job)
+        report = await run_assessment(llm, judge_llm, request, job)
         job.report_id = report.id
         job.status = "done"
         job.step = job.total
@@ -132,7 +134,10 @@ async def _run_job(job: AssessmentJob, llm: models.LLM, request: RunAssessmentRe
 
 
 async def run_assessment(
-    llm: models.LLM, request: RunAssessmentRequest, job: Optional[AssessmentJob] = None
+    llm: models.LLM,
+    judge_llm: models.LLM,
+    request: RunAssessmentRequest,
+    job: Optional[AssessmentJob] = None,
 ) -> models.Assessment:
     def progress(label: str, advance: bool = False) -> None:
         if job:
@@ -140,8 +145,8 @@ async def run_assessment(
             if advance:
                 job.step += 1
 
-    judge_model = request.judge_model or settings.ollama_judge_model
     subject_base_url = llm.base_url or settings.ollama_base_url
+    judge_base_url = judge_llm.base_url or settings.ollama_base_url
     inputs_by_id = {c.criterion_id: c.evidence_notes for c in request.criteria_inputs}
 
     results: List[CriterionResult] = []
@@ -173,7 +178,11 @@ async def run_assessment(
         try:
             user_prompt = _build_user_prompt(criterion, llm, request.system_context, evidence_notes, probe_transcript)
             verdict = await asyncio.to_thread(
-                local_llm.judge, JUDGE_SYSTEM_PROMPT, user_prompt, model=judge_model
+                local_llm.judge,
+                JUDGE_SYSTEM_PROMPT,
+                user_prompt,
+                model=judge_llm.model_name,
+                base_url=judge_base_url,
             )
 
             score = int(verdict["score"])
@@ -208,7 +217,9 @@ async def run_assessment(
         llm_id=llm.id,
         llm_name=llm.name,
         subject_model=llm.model_name,
-        judge_model=judge_model,
+        judge_model=judge_llm.model_name,
+        judge_llm_id=judge_llm.id,
+        judge_llm_name=judge_llm.name,
         system_context=request.system_context,
         criteria_results=results,
         function_scores=function_scores,

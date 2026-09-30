@@ -9,6 +9,10 @@ llm_id = form.attrs["data-llm-id"]
 run_btn = document["run_btn"]
 card = document["progress_card"]
 job_key = "matini.assessment_job." + llm_id
+subject_select = document["subject_select"]
+judge_select = document["judge_select"]
+warning = document["same_model_warning"]
+JUDGE_KEY = "matini.judge_llm_id"
 
 
 def ls_get(key):
@@ -71,9 +75,53 @@ def poll(job_id):
     request("get", "/api/assessment/jobs/" + job_id, ok, on_error=failed)
 
 
+def is_same_model(subject_option, judge_option):
+    """Same registered LLM, or the same Ollama model tag on the same endpoint."""
+    return subject_option.value == judge_option.value or (
+        subject_option.attrs["data-model-name"] == judge_option.attrs["data-model-name"]
+        and subject_option.attrs["data-base-url"] == judge_option.attrs["data-base-url"]
+    )
+
+
+def update_warning(ev=None):
+    if judge_select.options.length == 0:
+        return
+    subject_option = subject_select.options[subject_select.selectedIndex]
+    judge_option = judge_select.options[judge_select.selectedIndex]
+    if is_same_model(subject_option, judge_option):
+        warning.classList.remove("hidden")
+    else:
+        warning.classList.add("hidden")
+
+
+def choose_default_judge():
+    """Last used judge if still available, else the first LLM that isn't the subject, else the subject."""
+    values = [o.value for o in judge_select.options]
+    saved = ls_get(JUDGE_KEY)
+    if saved in values:
+        judge_select.value = saved
+        return
+    others = [v for v in values if v != llm_id]
+    if others:
+        judge_select.value = others[0]
+
+
+def on_judge_change(ev):
+    ls_set(JUDGE_KEY, judge_select.value)
+    update_warning()
+
+
+def on_subject_change(ev):
+    window.location.href = "/assessment/" + subject_select.value
+
+
 def start(ev):
     ev.preventDefault()
+    if not judge_select.value:
+        show_toast("กรุณาเลือกผู้ตัดสิน", True)
+        return
     body = {
+        "judge_llm_id": judge_select.value,
         "system_context": document.select_one("textarea[name=system_context]").value,
         "run_probes": document.select_one("input[name=run_probes]").checked,
         "criteria_inputs": [
@@ -97,6 +145,10 @@ def start(ev):
 
 
 form.bind("submit", start)
+subject_select.bind("change", on_subject_change)
+judge_select.bind("change", on_judge_change)
+choose_default_judge()
+update_warning()
 
 # Resume the progress bar if the page was reloaded/reopened while a run was in flight.
 saved_job = ls_get(job_key)

@@ -1,6 +1,8 @@
-"""Helpers shared by the Brython pages (loaded via the pythonpath set in base_layout)."""
-import json
+"""Helpers shared by the Brython pages (loaded via the pythonpath set in base_layout).
 
+`json` is imported inside the functions, not at module level, on purpose: see the
+"Brython gotchas" note in CLAUDE.md (repeat page loads crash on Chrome/Chromium 154).
+"""
 from browser import ajax, document, html, window
 
 
@@ -34,6 +36,8 @@ def show_toast(message, is_error=False):
 
 def error_detail(req):
     """Best-effort human-readable message from a failed ajax request."""
+    import json
+
     try:
         detail = json.loads(req.text).get("detail")
         if isinstance(detail, str):
@@ -47,6 +51,8 @@ def error_detail(req):
 
 def request(method, path, on_ok, data=None, on_error=None):
     """Call the API. on_ok receives the parsed JSON body; errors default to a toast."""
+
+    import json
 
     def done(req):
         if req.status == 200:

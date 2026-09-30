@@ -16,7 +16,7 @@
 
 | ส่วน | ไฟล์ | หน้าที่ |
 |---|---|---|
-| Config | `api/core/config.py` | `MONGODB_URI`, `OLLAMA_BASE_URL`, `OLLAMA_JUDGE_MODEL`, `OLLAMA_TIMEOUT_S` |
+| Config | `api/core/config.py` | `MONGODB_URI`, `OLLAMA_BASE_URL`, `OLLAMA_TIMEOUT_S` |
 | Database | `models/` (Beanie) | collection `llms`, `conversations`, `assessments` |
 | Schemas | `schemas/` | schema ของ LLM, บทสนทนา, เกณฑ์ประเมิน/รายงาน/สถานะงาน |
 | LLM client | `api/services/local_llm.py` | เรียก Ollama `/api/chat` (แบบ sync สำหรับประเมิน, แบบ async stream สำหรับแชท) |
@@ -45,7 +45,7 @@
    > สำหรับ POC ใช้ตัวเดียวกันได้เพื่อพิสูจน์ว่า pipeline ทำงานครบวงจร แต่สำหรับงานวิจัยจริง
    > ควรใช้โมเดลที่ต่างกัน (เช่น ดึงโมเดลที่ใหญ่/แข็งแรงกว่ามาเป็น judge โดยเฉพาะ) เช่น
    > ```bash
-   > ollama pull qwen2.5:14b   # ใช้เป็น judge (ตั้งเป็น OLLAMA_JUDGE_MODEL)
+   > ollama pull qwen2.5:14b   # ใช้เป็น judge (เพิ่มเป็น LLM ในหน้า Admin แล้วเลือกเป็นผู้ตัดสินในหน้าประเมิน)
    > ```
 3. เปิดให้ Ollama รับ connection จากเครื่องอื่นในวง LAN (ค่าเริ่มต้น bind แค่ 127.0.0.1):
    - Linux (systemd): แก้ `/etc/systemd/system/ollama.service.d/override.conf`
@@ -76,11 +76,8 @@
 MONGODB_URI="mongodb://localhost:27017/matinidb"
 
 # Ollama บนเครื่อง B — ใช้เป็นค่า Base URL เริ่มต้นเมื่อเพิ่ม LLM ในหน้า Admin แล้วเว้นช่องนี้ว่าง
-# และใช้เป็น endpoint ของ "ผู้ตัดสิน" ในการประเมิน
+# (ทั้งโมเดลที่ถูกประเมินและผู้ตัดสินเป็น LLM ในหน้า Admin — เลือกได้ในหน้าประเมิน ไม่ต้องตั้งใน .env)
 OLLAMA_BASE_URL=http://192.168.1.50:11434
-
-# โมเดลที่ใช้เป็น "ผู้ตัดสิน" (ให้คะแนนแต่ละเกณฑ์)
-OLLAMA_JUDGE_MODEL=llama3.2:3b
 
 # local LLM บนเครื่องที่ไม่แรงมากอาจตอบช้า ปรับเพิ่มได้ถ้า timeout บ่อย
 OLLAMA_TIMEOUT_S=120
@@ -133,6 +130,9 @@ poetry run python -m matini.cmd.web
 
 ## 5. วิธีใช้งานหน้าประเมิน
 
+0. เลือก **ผู้ถูกประเมิน** (AI ที่จะประเมิน — เปลี่ยนแล้วหน้าจะไปที่ `/assessment/<โมเดลนั้น>`) และ **ผู้ตัดสิน (Judge)**
+   จาก LLM ที่เปิดใช้งานในหน้า Admin ค่าเริ่มต้นของผู้ตัดสินคือตัวที่เลือกล่าสุด หรือ LLM แรกที่ไม่ใช่ตัวที่ถูกประเมิน
+   ถ้าเลือกเป็นโมเดลเดียวกันจะมีคำเตือนเรื่อง self-evaluation bias (ยังรันต่อได้ และรายงานจะมี badge "Judge = Subject")
 1. (ไม่บังคับ) กรอก **บริบทของระบบ** — อธิบายว่ากำลังประเมินอะไร ใช้ทำอะไร
 2. ติ๊ก **"ทดสอบพฤติกรรมจริงของโมเดลอัตโนมัติสำหรับเกณฑ์ในหมวด MEASURE"** ไว้ (ค่าเริ่มต้นติ๊กอยู่แล้ว)
    ระบบจะยิง probe prompt 4 ข้อ (bias / privacy / explainability / safety) ไปที่ LLM ที่เลือกผ่าน Ollama
@@ -160,7 +160,7 @@ poetry run python -m matini.cmd.web
 | GET/DELETE | `/api/conversations/{id}`, `/api/conversations/delete/{id}` | อ่าน/ลบบทสนทนา |
 | POST | `/api/conversations/{id}/messages` | ส่งข้อความ — ตอบกลับเป็น NDJSON stream (`{"delta"}` ... `{"done"}` หรือ `{"error"}`) |
 | GET | `/api/assessment/criteria` | รายการเกณฑ์ประเมินทั้งหมด (static) |
-| POST | `/api/assessment/{llm_id}/run` | เริ่มการประเมินเบื้องหลัง — คืน `job_id` ทันที |
+| POST | `/api/assessment/{llm_id}/run` | เริ่มการประเมินเบื้องหลัง (`llm_id` = โมเดลที่ถูกประเมิน, body ต้องมี `judge_llm_id`) — คืน `job_id` ทันที |
 | GET | `/api/assessment/jobs/{job_id}` | ความคืบหน้า: `status`, `step`, `total`, `label`, `report_id` |
 | GET | `/api/assessment/{llm_id}` | ผลล่าสุด |
 | GET | `/api/assessment/{llm_id}/history` | ประวัติทุกรอบ |

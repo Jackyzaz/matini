@@ -40,7 +40,7 @@ async def get_all(
 @router.get("/defaults")
 async def defaults() -> dict:
     """Server-side defaults (from .env) that the admin form pre-fills."""
-    return {"ollama_base_url": settings.ollama_base_url, "ollama_judge_model": settings.ollama_judge_model}
+    return {"ollama_base_url": settings.ollama_base_url}
 
 
 @router.get("/{llm_id}")

@@ -111,38 +111,83 @@ def test_chat_rejects_empty_message_and_unknown_llm(api_client):
     assert api_client.post(f"/api/conversations/{conv['id']}/messages", json={"content": "hi", "llm_id": missing}).status_code == 404
 
 
-def test_assessment_job_reports_progress_and_stores_report(api_client, monkeypatch):
-    monkeypatch.setattr(local_llm, "probe_subject", lambda prompt, **kw: "probe reply")
-    monkeypatch.setattr(
-        local_llm, "judge",
-        lambda system, user, **kw: {"score": 4, "risk_level": "Medium", "rationale": "ok"},
-    )
+def wait_for_job(api_client, job_id):
+    for _ in range(100):
+        job = api_client.get(f"/api/assessment/jobs/{job_id}").json()
+        if job["status"] != "running":
+            return job
+        time.sleep(0.1)
+    raise AssertionError("assessment job did not finish")
 
-    llm = create_llm(api_client, name="Assess LLM")
-    res = api_client.post(f"/api/assessment/{llm['id']}/run", json={"run_probes": True})
+
+def test_assessment_uses_selected_subject_and_judge(api_client, monkeypatch):
+    calls = {"probe": [], "judge": []}
+
+    def fake_probe(prompt, **kw):
+        calls["probe"].append(kw)
+        return "probe reply"
+
+    def fake_judge(system, user, **kw):
+        calls["judge"].append(kw)
+        return {"score": 4, "risk_level": "Medium", "rationale": "ok"}
+
+    monkeypatch.setattr(local_llm, "probe_subject", fake_probe)
+    monkeypatch.setattr(local_llm, "judge", fake_judge)
+
+    subject = create_llm(api_client, name="Subject LLM", model_name="subject-model", base_url="http://subject:11434")
+    judge = create_llm(api_client, name="Judge LLM", model_name="judge-model", base_url="http://judge:11434")
+
+    res = api_client.post(f"/api/assessment/{subject['id']}/run", json={"run_probes": True, "judge_llm_id": judge["id"]})
     assert res.status_code == 200
     job = res.json()
     criteria = api_client.get("/api/assessment/criteria").json()
     probes = sum(1 for c in criteria if c["probe_prompt"])
     assert job["total"] == len(criteria) + probes
 
-    for _ in range(100):
-        job = api_client.get(f"/api/assessment/jobs/{job['job_id']}").json()
-        if job["status"] != "running":
-            break
-        time.sleep(0.1)
+    job = wait_for_job(api_client, job["job_id"])
     assert job["status"] == "done", job
     assert job["step"] == job["total"]
 
-    report = api_client.get(f"/api/assessment/{llm['id']}").json()
+    # probes hit the subject, scoring hits the judge (each at its own endpoint)
+    assert calls["probe"] and all(c == {"model": "subject-model", "base_url": "http://subject:11434"} for c in calls["probe"])
+    assert calls["judge"] and all(c == {"model": "judge-model", "base_url": "http://judge:11434"} for c in calls["judge"])
+
+    report = api_client.get(f"/api/assessment/{subject['id']}").json()
     assert report["id"] == job["report_id"]
+    assert report["llm_id"] == subject["id"] and report["subject_model"] == "subject-model"
+    assert report["judge_llm_id"] == judge["id"]
+    assert report["judge_llm_name"] == "Judge LLM" and report["judge_model"] == "judge-model"
     assert report["overall_score"] == 4.0
     assert report["overall_risk_level"] == "Medium"
     assert len(report["criteria_results"]) == len(criteria)
     assert any(r["probe_transcript"] == "probe reply" for r in report["criteria_results"])
-    assert len(api_client.get(f"/api/assessment/{llm['id']}/history").json()) == 1
+    assert len(api_client.get(f"/api/assessment/{subject['id']}/history").json()) == 1
+
+
+def test_assessment_allows_judge_equal_to_subject(api_client, monkeypatch):
+    monkeypatch.setattr(local_llm, "judge", lambda s, u, **kw: {"score": 3, "risk_level": "Medium", "rationale": "ok"})
+    llm = create_llm(api_client, name="Self judge")
+    res = api_client.post(f"/api/assessment/{llm['id']}/run", json={"run_probes": False, "judge_llm_id": llm["id"]})
+    assert res.status_code == 200
+    assert wait_for_job(api_client, res.json()["job_id"])["status"] == "done"
+    report = api_client.get(f"/api/assessment/{llm['id']}").json()
+    assert report["judge_llm_id"] == report["llm_id"]
+
+
+def test_assessment_requires_a_valid_judge(api_client):
+    llm = create_llm(api_client, name="Needs judge")
+    assert api_client.post(f"/api/assessment/{llm['id']}/run", json={"run_probes": False}).status_code == 422
+    unknown = api_client.post(f"/api/assessment/{llm['id']}/run", json={"judge_llm_id": "0" * 24})
+    assert unknown.status_code == 404
+
+    deleted = create_llm(api_client, name="Deleted judge")
+    api_client.delete(f"/api/llms/delete/{deleted['id']}")
+    res = api_client.post(f"/api/assessment/{llm['id']}/run", json={"judge_llm_id": deleted["id"]})
+    assert res.status_code == 404
 
 
 def test_assessment_unknown_job_and_llm(api_client):
+    llm = create_llm(api_client, name="Judge for unknown")
     assert api_client.get("/api/assessment/jobs/nope").status_code == 404
-    assert api_client.post(f"/api/assessment/{'0' * 24}/run", json={}).status_code == 404
+    res = api_client.post(f"/api/assessment/{'0' * 24}/run", json={"judge_llm_id": llm["id"]})
+    assert res.status_code == 404

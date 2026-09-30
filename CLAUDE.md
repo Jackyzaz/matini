@@ -15,7 +15,7 @@ matini/
   models/          Beanie Documents (LLM, Conversation, Assessment) + BeanieClient/init_beanie
   schemas/         Pydantic schemas: bases, llms, conversations, assessment
   api/
-    core/config.py   Settings (.env): MONGODB_URI, OLLAMA_BASE_URL, OLLAMA_JUDGE_MODEL, OLLAMA_TIMEOUT_S
+    core/config.py   Settings (.env): MONGODB_URI, OLLAMA_BASE_URL, OLLAMA_TIMEOUT_S
     routers/         llms.py, chat.py (/conversations), assessment.py
     services/        local_llm.py (Ollama client), assessment.py (job engine), nist_rmf.py (12 criteria)
                      guardrails.py — DISABLED (see below)
@@ -43,7 +43,7 @@ matini/
 
 - **Chat streaming**: `POST /api/conversations/{id}/messages` returns NDJSON: a series of `{"delta": "..."}` lines, then `{"error": "..."}` if something failed, and always a closing `{"done": true}`. It sends the full history to Ollama through `local_llm.chat_stream` (async, httpx). The assistant message is saved in `finally`, so a partial answer is kept even if the stream breaks.
 - **Assessment**: `POST /api/assessment/{llm_id}/run` returns an `AssessmentJob` immediately and runs an `asyncio.create_task` in the background. The blocking Ollama calls (`probe_subject` / `judge`, sync `requests`) go through `asyncio.to_thread`. Progress (`step`/`total`/`label`) is kept in memory (`services/assessment.py: JOBS`) and the UI polls `/api/assessment/jobs/{job_id}` every 1.5 s. If the API restarts mid-run, the job is lost. Only the finished report is stored in Mongo.
-- **Models**: the subject is the chosen LLM, called at its own `base_url`. The judge is `OLLAMA_JUDGE_MODEL`, called at `OLLAMA_BASE_URL`. An LLM with an empty `base_url` uses `OLLAMA_BASE_URL`.
+- **Subject and judge**: both are LLMs registered in Admin, and both are called at their own `base_url` (empty means `OLLAMA_BASE_URL`). The subject (the AI being assessed) is the `llm_id` in `/assessment/<llm_id>`, and the subject dropdown just navigates to another id. The judge is chosen per run: `RunAssessmentRequest.judge_llm_id` is required, and the report stores `judge_llm_id`, `judge_llm_name` and `judge_model`. There is no `.env` judge setting any more. Judge = subject is allowed. The UI shows a warning (self-evaluation bias) and the report gets a "Judge = Subject" badge, but the API does not block it. Reports created before the judge became selectable have no `judge_llm_*` fields (they are `Optional`).
 - **Guardrails are disabled** but kept in the codebase. `services/guardrails.py` is not wired into any route. Don't delete it, and don't wire it back in unless asked. `run_guardrails()` is the entry point for re-enabling it later.
 - **No mock data.** Don't seed fake models or canned replies. If there are no LLMs yet, the UI tells the user to add one on the admin page.
 - There is no auth on any page and CORS is `*`. This is a known limitation.
@@ -54,6 +54,8 @@ matini/
 - Use `javascript.NULL` instead of `None` when passing a null to a JS API (for example `history.pushState(NULL, "", url)`). `None` becomes a function and causes a `DataCloneError`.
 - Streaming and markdown are done in JS (`window.matini.*`) because Brython can't read a `ReadableStream` well. `onLine` receives a raw string, and Python parses it with `json.loads`.
 - The Brython `pythonpath` is set to `static/brython`, so pages can `from common import ...`.
+- Flask caches templates unless it runs in debug mode, so restart the web server after editing a template (Brython `.py` and static files are served fresh).
+- **Chrome/Chromium 154 V8 bug (found 2026-09-30, Chromium and Google Chrome 154.0.8037.57):** on a repeat page load in the same browser session, Brython can crash with `Number.prototype.toString requires that 'this' be a Number` (raised from `str.$factory`, and Brython then fails again while formatting the error). It hit `import re` / `import json` at module level, most reliably when the same page was loaded twice in a row (for example the assessment subject dropdown, which navigates from `/assessment/A` to `/assessment/B`). Disabling V8's compilation cache (`--js-flags=--no-compilation-cache`) removes it, so it is a browser bug, not an app bug. Not a fix but the mitigation that works: **do not import stdlib modules such as `json` or `re` at the top of a page script or of `common.py`; import them inside the function that needs them.** Replacing `json` with `javascript.JSON` looked attractive but made the chat and admin pages flakier, so don't. If you touch the imports, re-check with `page.goto(url)` several times in one Playwright session, on more than one page.
 
 ## Commands
 

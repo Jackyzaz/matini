@@ -22,6 +22,10 @@
     {%- endif -%}
 {%- endmacro %}
 
+{% macro llm_label(l) -%}
+    {{ l.name }} ({{ l.model_name }}){% if l.parameter_size_b %} · {{ '%g'|format(l.parameter_size_b) }}B{% endif %}
+{%- endmacro %}
+
 {% macro fn_icon(fn) -%}
     {%- if fn == 'GOVERN' -%} ph-scales
     {%- elif fn == 'MAP' -%} ph-compass
@@ -122,8 +126,10 @@
                 {% endfor %}
             </div>
             <p class="text-[11px] text-slate-400 mt-4">
-                Judge model: <span class="font-mono">{{ report.judge_model }}</span> •
-                รันเมื่อ {{ report.created_date }}
+                Judge:
+                {% if report.judge_llm_name %}<strong class="text-slate-500">{{ report.judge_llm_name }}</strong> (<span class="font-mono">{{ report.judge_model }}</span>){% else %}<span class="font-mono">{{ report.judge_model }}</span>{% endif %}
+                {% if report.judge_llm_id and report.judge_llm_id == report.llm_id %}<span class="badge badge-warning badge-soft badge-sm ml-1">Judge = Subject</span>{% endif %}
+                • รันเมื่อ {{ report.created_date }}
             </p>
         </div>
 
@@ -186,8 +192,34 @@
             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div>
                     <h3 class="text-base font-bold text-slate-900">Run Assessment</h3>
-                    <p class="text-xs text-slate-500 mt-0.5">ผู้ถูกทดสอบคือ {{ llm.name }} ส่วนผู้ตัดสินใช้โมเดลตาม OLLAMA_JUDGE_MODEL</p>
+                    <p class="text-xs text-slate-500 mt-0.5">เลือกโมเดลที่ถูกประเมิน และโมเดลที่ทำหน้าที่ผู้ตัดสิน (จาก LLM ในหน้า Admin)</p>
                 </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="subject_select">ผู้ถูกประเมิน (AI ที่จะประเมิน)</label>
+                    <select id="subject_select" class="select select-sm w-full bg-slate-50 border-slate-200 text-xs">
+                        {% for l in subject_options %}
+                        <option value="{{ l.id }}" data-model-name="{{ l.model_name }}" data-base-url="{{ l.base_url }}" {% if l.id == llm.id %}selected{% endif %}>{{ llm_label(l) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 mb-1.5" for="judge_select">ผู้ตัดสิน (Judge)</label>
+                    <select id="judge_select" class="select select-sm w-full bg-slate-50 border-slate-200 text-xs" {% if not judge_options %}disabled{% endif %}>
+                        {% for l in judge_options %}
+                        <option value="{{ l.id }}" data-model-name="{{ l.model_name }}" data-base-url="{{ l.base_url }}">{{ llm_label(l) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% if not judge_options %}
+            <div role="alert" class="alert alert-error alert-soft text-xs py-2">ยังไม่มี LLM ที่เปิดใช้งาน — <a href="/admin/" class="underline font-semibold">เพิ่ม LLM ในหน้า Admin</a> ก่อน</div>
+            {% endif %}
+            <div id="same_model_warning" role="alert" class="hidden alert alert-warning alert-soft text-xs py-2">
+                <i class="ph ph-warning"></i>
+                <span>ผู้ตัดสินและผู้ถูกประเมินเป็นโมเดลเดียวกัน อาจเกิด self-evaluation bias (โมเดลตัดสินตัวเอง) — ยังรันต่อได้</span>
             </div>
 
             <div>
@@ -224,7 +256,7 @@
             {% endif %}
             {% endfor %}
 
-            <button type="submit" id="run_btn"
+            <button type="submit" id="run_btn" {% if not judge_options %}disabled{% endif %}
                 class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-all shadow-xs hover:shadow-md flex items-center justify-center gap-1.5">
                 <i class="ph ph-play"></i> Run NIST AI RMF Assessment
             </button>
