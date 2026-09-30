@@ -204,6 +204,28 @@ def test_chat_streams_persists_and_sends_history(api_client, monkeypatch):
     assert api_client.get(f"/api/conversations/{conv['id']}").status_code == 404
 
 
+def test_chat_prepends_system_prompt_but_does_not_persist_it(api_client, monkeypatch):
+    seen_histories = []
+
+    async def fake_stream(model, messages, **kwargs):
+        seen_histories.append([dict(m) for m in messages])
+        yield "ok"
+
+    monkeypatch.setattr(local_llm, "chat_stream", fake_stream)
+
+    llm = create_llm(api_client, name="Persona LLM", system_prompt="You are a pirate.")
+    conv = api_client.post("/api/conversations/create", json={"llm_id": llm["id"]}).json()
+    api_client.post(f"/api/conversations/{conv['id']}/messages", json={"content": "hi", "llm_id": llm["id"]})
+
+    assert seen_histories[0] == [
+        {"role": "system", "content": "You are a pirate."},
+        {"role": "user", "content": "hi"},
+    ]
+
+    saved = api_client.get(f"/api/conversations/{conv['id']}").json()
+    assert [m["role"] for m in saved["messages"]] == ["user", "assistant"]
+
+
 def test_chat_reports_ollama_failure_in_stream(api_client, monkeypatch):
     async def failing_stream(model, messages, **kwargs):
         raise local_llm.OllamaUnavailableError("ollama is down")

@@ -117,6 +117,7 @@ def make_edit(llm):
         document["f_size"].value = "" if llm.get("parameter_size_b") is None else format_size(llm["parameter_size_b"])[:-1]
         document["f_base_url"].value = llm["base_url"]
         document["f_description"].value = llm["description"]
+        document["f_system_prompt"].value = llm.get("system_prompt", "")
         set_form_mode(llm)
         document["f_name"].focus()
 
@@ -181,6 +182,7 @@ def on_submit(ev):
         "parameter_size_b": float(size_text) if size_text else None,
         "base_url": document["f_base_url"].value.strip(),
         "description": document["f_description"].value.strip(),
+        "system_prompt": document["f_system_prompt"].value.strip(),
     }
 
     def ok(_):

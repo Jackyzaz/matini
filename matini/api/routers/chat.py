@@ -79,6 +79,8 @@ async def send_message(
     await conversation.save()
 
     history = [{"role": m.role, "content": m.content} for m in conversation.messages]
+    if llm.system_prompt:
+        history = [{"role": "system", "content": llm.system_prompt}] + history
     base_url = effective_base_url(llm)
     model_name = llm.model_name
 
