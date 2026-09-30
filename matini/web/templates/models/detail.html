@@ -51,16 +51,21 @@
                 <span class="w-1.5 h-1.5 rounded-full {% if model.guardrails.llm_judge_enabled %}bg-indigo-500{% else %}bg-slate-400{% endif %}"></span>
                 AI Judge ({{ model.guardrails.llm_judge_strictness|capitalize }})
             </span>
+
+            <a href="/model/{{ model.id }}/assessment"
+                class="px-2.5 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 bg-violet-50 text-violet-700 border border-violet-200/80 hover:bg-violet-100 transition-colors">
+                <i class="ph ph-clipboard-text"></i> NIST AI RMF Assessment
+            </a>
         </div>
     </div>
 </div>
 
 <!-- Main 2-Column Workstation -->
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-    
+
     <!-- LEFT: Sandboxed Chat & Test Interface (7 Cols) -->
     <div class="lg:col-span-7 flex flex-col gap-6">
-        
+
         <!-- Chat Box -->
         <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs flex flex-col h-[560px]">
             <div class="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -147,7 +152,7 @@
             </div>
 
             <form id="guardrail_form" class="space-y-6" onsubmit="return false;">
-                
+
                 <!-- LAYER 1: Rule-Based Guardrail -->
                 <div class="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80">
                     <div class="flex items-center justify-between mb-3">

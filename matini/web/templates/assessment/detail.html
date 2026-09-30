@@ -1,0 +1,223 @@
+{% extends "base/base_layout.html" %}
+
+{% block title %}NIST AI RMF Assessment - {{ model.name }}{% endblock %}
+
+{% block content %}
+
+{% macro risk_classes(level) -%}
+    {%- if level == 'Low' -%} bg-emerald-50 text-emerald-700 border-emerald-200/80
+    {%- elif level == 'Medium' -%} bg-amber-50 text-amber-700 border-amber-200/80
+    {%- elif level == 'High' -%} bg-orange-50 text-orange-700 border-orange-200/80
+    {%- elif level == 'Critical' -%} bg-rose-50 text-rose-700 border-rose-200/80
+    {%- else -%} bg-slate-100 text-slate-500 border-slate-200
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro risk_dot(level) -%}
+    {%- if level == 'Low' -%} bg-emerald-500
+    {%- elif level == 'Medium' -%} bg-amber-500
+    {%- elif level == 'High' -%} bg-orange-500
+    {%- elif level == 'Critical' -%} bg-rose-500
+    {%- else -%} bg-slate-300
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro fn_icon(fn) -%}
+    {%- if fn == 'GOVERN' -%} ph-scales
+    {%- elif fn == 'MAP' -%} ph-compass
+    {%- elif fn == 'MEASURE' -%} ph-ruler
+    {%- else -%} ph-flow-arrow
+    {%- endif -%}
+{%- endmacro %}
+
+<!-- Breadcrumb -->
+<div class="mb-6">
+    <div class="flex items-center gap-2 text-xs font-medium text-slate-500 mb-3 flex-wrap">
+        <a href="/" class="hover:text-indigo-600 flex items-center gap-1 transition-colors">
+            <i class="ph ph-arrow-left"></i> AI Registry
+        </a>
+        <span>/</span>
+        <a href="/model/{{ model.id }}" class="hover:text-indigo-600 transition-colors">{{ model.name }}</a>
+        <span>/</span>
+        <span class="text-slate-900 font-semibold">NIST AI RMF Assessment</span>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200/80 text-violet-700 text-[11px] font-semibold mb-2">
+                <i class="ph ph-clipboard-text"></i>
+                <span>NIST AI RMF Ethical Impact Assessment — POC</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900">{{ model.name }}</h1>
+            <p class="text-xs text-slate-500 mt-1">{{ model.provider }} • {{ model.tagline }}</p>
+        </div>
+
+        {% if report %}
+        <div class="flex items-center gap-2 px-4 py-2.5 rounded-xl border {{ risk_classes(report.overall_risk_level) }}">
+            <span class="w-2.5 h-2.5 rounded-full {{ risk_dot(report.overall_risk_level) }}"></span>
+            <div>
+                <div class="text-[11px] font-semibold uppercase tracking-wider">Overall Risk</div>
+                <div class="text-lg font-bold leading-tight">
+                    {{ report.overall_risk_level }}
+                    {% if report.overall_score is not none %}<span class="text-xs font-medium opacity-70">({{ report.overall_score }}/5)</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+        {% for category, msg in messages %}
+        <div class="px-4 py-3 rounded-xl text-xs font-medium border
+            {% if category == 'error' %} bg-rose-50 text-rose-700 border-rose-200
+            {% else %} bg-emerald-50 text-emerald-700 border-emerald-200 {% endif %}">
+            {{ msg }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT: Results (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-6">
+        {% if report %}
+        <!-- Per-function score summary -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs">
+            <h3 class="text-sm font-bold text-slate-900 mb-4">คะแนนตามฟังก์ชันหลักของ NIST AI RMF</h3>
+            <div class="space-y-3">
+                {% for fn in functions %}
+                {% set fscore = report.function_scores.get(fn) %}
+                <div>
+                    <div class="flex items-center justify-between text-xs mb-1">
+                        <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+                            <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
+                        </span>
+                        <span class="font-mono text-slate-500">{{ fscore if fscore is not none else '—' }}{% if fscore is not none %}/5{% endif %}</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div class="h-full rounded-full bg-indigo-500" style="width: {{ ((fscore / 5 * 100) if fscore is not none else 0)|round(0, 'floor') }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-[11px] text-slate-400 mt-4">
+                Judge model: <span class="font-mono">{{ report.judge_model }}</span> •
+                รันเมื่อ {{ report.created_at }}
+            </p>
+        </div>
+
+        <!-- Per-criterion detail -->
+        {% for fn in functions %}
+        {% set items = grouped_criteria.get(fn, []) %}
+        {% if items %}
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs">
+            <h3 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
+            </h3>
+            <div class="space-y-4">
+                {% for c in items %}
+                {% set r = results_by_id.get(c.id) %}
+                <div class="p-4 rounded-xl border {{ risk_classes(r.risk_level if r else 'Unscored') }} bg-opacity-40">
+                    <div class="flex items-start justify-between gap-3 mb-1.5">
+                        <div>
+                            <div class="text-[10px] font-mono text-slate-400">{{ c.nist_category }} • {{ c.ethics_dimension }}</div>
+                            <div class="text-sm font-bold text-slate-900">{{ c.title }}</div>
+                        </div>
+                        {% if r %}
+                        <span class="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold border {{ risk_classes(r.risk_level) }}">
+                            {{ r.risk_level }}{% if r.score is not none %} · {{ r.score }}/5{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-slate-600 mb-2">{{ c.guiding_question }}</p>
+                    {% if r and r.rationale %}
+                    <p class="text-xs text-slate-800 bg-white/70 rounded-lg p-2.5 border border-slate-200/60">
+                        <strong class="font-semibold">เหตุผล:</strong> {{ r.rationale }}
+                    </p>
+                    {% endif %}
+                    {% if r and r.judge_error %}
+                    <p class="text-xs text-rose-700 mt-2"><i class="ph ph-warning-circle"></i> {{ r.judge_error }}</p>
+                    {% endif %}
+                    {% if r and r.probe_transcript %}
+                    <details class="mt-2">
+                        <summary class="text-[11px] font-semibold text-slate-500 cursor-pointer">ดูผลการทดสอบอัตโนมัติ (probe transcript)</summary>
+                        <pre class="text-[11px] font-mono whitespace-pre-wrap bg-slate-900 text-slate-100 rounded-lg p-2.5 mt-1.5">{{ r.probe_transcript }}</pre>
+                    </details>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-10 text-center shadow-xs">
+            <i class="ph ph-clipboard-text text-4xl text-slate-300 mb-2"></i>
+            <p class="text-sm font-semibold text-slate-700">ยังไม่มีผลการประเมิน</p>
+            <p class="text-xs text-slate-400 mt-1">กรอกแบบฟอร์มด้านขวาแล้วกด "Run NIST AI RMF Assessment" เพื่อเริ่มต้น</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- RIGHT: Assessment form (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-6">
+        <form method="POST" action="/model/{{ model.id }}/assessment/run" class="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Run Assessment</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">local LLM (Ollama) จะถูกเรียกใช้เป็นทั้งผู้ถูกทดสอบและผู้ตัดสิน</p>
+                </div>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded bg-violet-50 text-violet-700">POC</span>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-semibold text-slate-700 mb-1.5">บริบทของระบบ (system context)</label>
+                <textarea name="system_context" rows="3" placeholder="อธิบายบริบทการใช้งาน กลุ่มผู้ใช้ แหล่งข้อมูล ฯลฯ ที่ผู้ตัดสินควรรู้..."
+                    class="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">{{ report.system_context if report else '' }}</textarea>
+            </div>
+
+            <label class="flex items-center gap-2 text-xs font-medium text-slate-700">
+                <input type="checkbox" name="run_probes" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                ทดสอบพฤติกรรมจริงของโมเดลอัตโนมัติสำหรับเกณฑ์ในหมวด MEASURE (ใช้เวลานานขึ้น)
+            </label>
+
+            {% for fn in functions %}
+            {% set items = grouped_criteria.get(fn, []) %}
+            {% if items %}
+            <div class="pt-3 border-t border-slate-100">
+                <h4 class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                    <i class="ph {{ fn_icon(fn) }} text-indigo-600"></i> {{ fn }}
+                </h4>
+                <div class="space-y-3">
+                    {% for c in items %}
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-600 mb-1">
+                            {{ c.nist_category }} — {{ c.title }}
+                            {% if c.probe_prompt %}<span class="text-violet-600 font-normal">(มี auto-probe)</span>{% endif %}
+                        </label>
+                        <textarea name="evidence__{{ c.id }}" rows="2" placeholder="หลักฐาน/บันทึกของคุณสำหรับเกณฑ์นี้ (เว้นว่างได้)"
+                            class="w-full text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">{{ results_by_id.get(c.id, {}).get('evidence_notes', '') }}</textarea>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+            <button type="submit"
+                class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-all shadow-xs hover:shadow-md flex items-center justify-center gap-1.5">
+                <i class="ph ph-play"></i> Run NIST AI RMF Assessment
+            </button>
+            <p class="text-[10px] text-slate-400 text-center">
+                ต้องมี Ollama รันอยู่ที่ OLLAMA_BASE_URL — ถ้ายังไม่ได้ตั้งค่า ดู docs/nist-rmf-poc-guide.md
+            </p>
+        </form>
+    </div>
+</div>
+{% endblock %}
