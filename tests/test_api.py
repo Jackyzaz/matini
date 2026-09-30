@@ -35,6 +35,21 @@ def test_llm_crud_and_soft_delete(api_client):
     assert llm["id"] not in [l["id"] for l in api_client.get("/api/llms?status=all").json()["llms"]]
 
 
+def test_llm_parameter_size_is_optional_and_validated(api_client):
+    assert create_llm(api_client, name="No size")["parameter_size_b"] is None
+
+    sized = create_llm(api_client, name="Sized", parameter_size_b=3.2)
+    assert sized["parameter_size_b"] == 3.2
+    assert api_client.get(f"/api/llms/{sized['id']}").json()["parameter_size_b"] == 3.2
+
+    body = {k: v for k, v in sized.items() if k != "id"}
+    res = api_client.put(f"/api/llms/update/{sized['id']}", json={**body, "parameter_size_b": 8})
+    assert res.json()["parameter_size_b"] == 8
+
+    bad = api_client.post("/api/llms/create", json={"name": "Bad", "model_name": "x", "parameter_size_b": 0})
+    assert bad.status_code == 422
+
+
 def test_llm_defaults_come_from_settings(api_client):
     data = api_client.get("/api/llms/defaults").json()
     assert data["ollama_base_url"].startswith("http")

@@ -29,6 +29,7 @@ def test_admin_page(web_client):
     html = web_client.get("/admin/").data.decode("utf-8")
     assert 'id="llm_form"' in html
     assert "admin.py" in html
+    assert 'id="f_size"' in html
 
 
 class FakeResponse:
@@ -45,7 +46,7 @@ def test_assessment_page_has_progress_bar(web_client, monkeypatch):
         "id": "g1", "nist_function": "GOVERN", "nist_category": "GOVERN 1",
         "ethics_dimension": "Bias & Fairness", "title": "Policies", "guiding_question": "?", "probe_prompt": None,
     }
-    llm = {"id": "abc", "name": "Test LLM", "provider": "ollama", "model_name": "llama3.1"}
+    llm = {"id": "abc", "name": "Test LLM", "provider": "ollama", "model_name": "llama3.1", "parameter_size_b": 8.0}
 
     def fake_get(url, timeout=None):
         if url.endswith("/api/llms/abc"):
@@ -57,6 +58,7 @@ def test_assessment_page_has_progress_bar(web_client, monkeypatch):
     monkeypatch.setattr(assessment_view.requests, "get", fake_get)
     html = web_client.get("/assessment/abc").data.decode("utf-8")
     assert 'id="progress_bar"' in html
+    assert ">8B</span>" in html  # parameter-size badge
     assert 'data-llm-id="abc"' in html
     assert "assessment.py" in html
 

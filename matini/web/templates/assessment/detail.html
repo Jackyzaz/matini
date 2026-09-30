@@ -49,7 +49,8 @@
                 <span>NIST AI RMF Ethical Impact Assessment</span>
             </div>
             <h1 class="text-xl sm:text-2xl font-bold text-slate-900">{{ llm.name }}</h1>
-            <p class="text-xs text-slate-500 mt-1">{{ llm.provider }} • <span class="font-mono">{{ llm.model_name }}</span></p>
+            <p class="text-xs text-slate-500 mt-1">{{ llm.provider }} • <span class="font-mono">{{ llm.model_name }}</span>
+                {% if llm.parameter_size_b %}<span class="badge badge-primary badge-soft badge-sm font-mono font-semibold ml-1">{{ '%g'|format(llm.parameter_size_b) }}B</span>{% endif %}</p>
         </div>
 
         {% if report %}

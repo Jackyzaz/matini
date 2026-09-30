@@ -2,6 +2,8 @@ from browser import bind, document, html, window
 
 from common import error_detail, request, show_toast
 
+editing = {"llm": None}  # the LLM being edited, or None when the form adds a new one
+
 tbody = document["llm_table_body"]
 form = document["llm_form"]
 
@@ -21,11 +23,30 @@ def action_button(icon, title, handler, cls="hover:bg-slate-100 text-slate-600")
     return btn
 
 
+def size_badge(llm):
+    if llm.get("parameter_size_b") is None:
+        return html.SPAN("—", Class="text-slate-400")
+    return html.SPAN(format_size(llm["parameter_size_b"]), Class="badge badge-primary badge-soft badge-sm font-mono font-semibold")
+
+
+def format_size(value):
+    # 8.0 -> "8B", 3.2 -> "3.2B"
+    return (str(int(value)) if value == int(value) else str(value)) + "B"
+
+
 def render_table(data):
     tbody.clear()
+    if editing["llm"]:
+        # keep the edit target in sync (e.g. status toggled meanwhile); leave edit mode if it was deleted
+        current = [l for l in data["llms"] if l["id"] == editing["llm"]["id"]]
+        if current:
+            editing["llm"] = current[0]
+        else:
+            form.reset()
+            set_form_mode(None)
     if not data["llms"]:
         tbody <= html.TR(
-            html.TD("ยังไม่มี LLM — เพิ่มได้จากฟอร์มด้านขวา", colspan="5", Class="px-4 py-8 text-center text-slate-400")
+            html.TD("ยังไม่มี LLM — เพิ่มได้จากฟอร์มด้านขวา", colspan="6", Class="px-4 py-8 text-center text-slate-400")
         )
         return
     for llm in data["llms"]:
@@ -39,6 +60,7 @@ def render_table(data):
         name.text = llm["name"]
         actions = html.DIV(Class="flex items-center justify-end gap-0.5")
         actions <= html.A(html.I(Class="ph ph-clipboard-text"), href="/assessment/" + llm["id"], Class="p-1.5 rounded-lg text-sm hover:bg-slate-100 text-slate-600", title="ประเมิน NIST AI RMF")
+        actions <= action_button("ph-pencil-simple", "แก้ไข", make_edit(llm))
         actions <= action_button("ph-plugs-connected", "ทดสอบการเชื่อมต่อ", make_test(llm))
         actions <= action_button("ph-toggle-left" if active else "ph-toggle-right", "ปิดใช้งาน" if active else "เปิดใช้งาน", make_toggle(llm))
         actions <= action_button("ph-trash", "ลบ", make_delete(llm), "hover:bg-rose-50 text-rose-600")
@@ -46,6 +68,7 @@ def render_table(data):
             [
                 cell(name),
                 cell(llm["model_name"], "px-4 py-3 font-mono text-slate-700"),
+                cell(size_badge(llm)),
                 cell(llm["base_url"] or "(ค่าเริ่มต้นจาก .env)", "px-4 py-3 font-mono text-slate-500"),
                 cell(badge),
                 cell(actions, "px-4 py-3"),
@@ -55,6 +78,37 @@ def render_table(data):
 
 def load():
     request("get", "/api/llms?status=all", render_table)
+
+
+def set_form_mode(llm):
+    editing["llm"] = llm
+    is_edit = llm is not None
+    document["form_title"].text = "แก้ไข LLM" if is_edit else "เพิ่ม LLM"
+    document["f_submit_text"].text = "บันทึกการแก้ไข" if is_edit else "เพิ่ม LLM"
+    document["f_submit_icon"].className = "ph ph-floppy-disk" if is_edit else "ph ph-plus"
+    if is_edit:
+        document["f_cancel"].classList.remove("hidden")
+    else:
+        document["f_cancel"].classList.add("hidden")
+
+
+def make_edit(llm):
+    def handler(ev):
+        document["f_name"].value = llm["name"]
+        document["f_model"].value = llm["model_name"]
+        document["f_size"].value = "" if llm.get("parameter_size_b") is None else format_size(llm["parameter_size_b"])[:-1]
+        document["f_base_url"].value = llm["base_url"]
+        document["f_description"].value = llm["description"]
+        set_form_mode(llm)
+        document["f_name"].focus()
+
+    return handler
+
+
+@bind(document["f_cancel"], "click")
+def on_cancel(ev):
+    form.reset()
+    set_form_mode(None)
 
 
 def make_test(llm):
@@ -81,14 +135,9 @@ def make_test(llm):
 
 def make_toggle(llm):
     def handler(ev):
-        body = {
-            "name": llm["name"],
-            "provider": llm["provider"],
-            "base_url": llm["base_url"],
-            "model_name": llm["model_name"],
-            "description": llm["description"],
-            "status": "inactive" if llm["status"] == "active" else "active",
-        }
+        # resend every field (the update endpoint replaces them all), flipping only the status
+        body = {k: v for k, v in llm.items() if k != "id"}
+        body["status"] = "inactive" if llm["status"] == "active" else "active"
         request("put", "/api/llms/update/" + llm["id"], lambda _: load(), data=body)
 
     return handler
@@ -106,25 +155,34 @@ def make_delete(llm):
 def on_submit(ev):
     ev.preventDefault()
     submit = document["f_submit"]
+    size_text = document["f_size"].value.strip()
     submit.disabled = True
     body = {
         "name": document["f_name"].value.strip(),
         "model_name": document["f_model"].value.strip(),
+        "parameter_size_b": float(size_text) if size_text else None,
         "base_url": document["f_base_url"].value.strip(),
         "description": document["f_description"].value.strip(),
     }
 
     def ok(_):
         submit.disabled = False
+        show_toast("บันทึกการแก้ไขแล้ว" if editing["llm"] else "เพิ่ม LLM แล้ว")
         form.reset()
-        show_toast("เพิ่ม LLM แล้ว")
+        set_form_mode(None)
         load()
 
     def failed(req):
         submit.disabled = False
         show_toast(error_detail(req), True)
 
-    request("post", "/api/llms/create", ok, data=body, on_error=failed)
+    if editing["llm"]:
+        # keep provider and status (enabled/disabled) as they are; the form edits the rest
+        body["provider"] = editing["llm"]["provider"]
+        body["status"] = editing["llm"]["status"]
+        request("put", "/api/llms/update/" + editing["llm"]["id"], ok, data=body, on_error=failed)
+    else:
+        request("post", "/api/llms/create", ok, data=body, on_error=failed)
 
 
 def set_defaults(data):

@@ -12,6 +12,8 @@ class BaseLLM(BaseModel):
     base_url: str = ""
     model_name: str  # the Ollama model tag, e.g. "llama3.1"
     description: str = ""
+    # Model size in billions of parameters (e.g. 3.2 for a 3.2B model); None = unknown.
+    parameter_size_b: Optional[float] = Field(default=None, gt=0)
     status: Literal["active", "inactive", "delete"] = "active"
 
 

@@ -1569,6 +1569,9 @@
   .mb-6 {
     margin-bottom: calc(var(--spacing) * 6);
   }
+  .ml-1 {
+    margin-left: var(--spacing);
+  }
   @layer daisyui.l1.l2.l3 {
     .status {
       display: inline-block;
@@ -1853,6 +1856,28 @@
   .border-b {
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 1px;
+  }
+  @layer daisyui.l1.l2 {
+    .badge-soft {
+      color: var(--badge-color, var(--color-base-content));
+      background-color: var(--badge-color, var(--color-base-content));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .badge-soft {
+        background-color: color-mix( in oklab, var(--badge-color, var(--color-base-content)) 8%, var(--color-base-100) );
+      }
+    }
+    .badge-soft {
+      border-color: var(--badge-color, var(--color-base-content));
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .badge-soft {
+        border-color: color-mix( in oklab, var(--badge-color, var(--color-base-content)) 10%, var(--color-base-100) );
+      }
+    }
+    .badge-soft {
+      background-image: none;
+    }
   }
   .border-amber-200\/80 {
     border-color: color-mix(in srgb, oklch(92.4% 0.12 95.746) 80%, transparent);
@@ -2168,6 +2193,12 @@
     font-size: var(--text-xs);
     line-height: var(--tw-leading, var(--text-xs--line-height));
   }
+  @layer daisyui.l1.l2 {
+    .badge-sm {
+      --size: calc(var(--size-selector, 0.25rem) * 5);
+      font-size: 0.75rem;
+    }
+  }
   .text-\[10px\] {
     font-size: 10px;
   }
@@ -2324,6 +2355,21 @@
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
   }
+  @layer daisyui.l1.l2 {
+    .input-sm {
+      --in-size-mul: 8;
+      --font-size-min: 0.75rem;
+      --spin-my: -2;
+    }
+    .floating-label:has(.input-sm) {
+      --top-mul: 4;
+      --font-size: 0.75rem;
+    }
+    .badge-primary {
+      --badge-color: var(--color-primary);
+      --badge-fg: var(--color-primary-content);
+    }
+  }
   .outline-none {
     --tw-outline-style: none;
     outline-style: none;
@@ -2384,6 +2430,9 @@
     }
     .hover\:bg-slate-100:hover {
       background-color: var(--color-slate-100);
+    }
+    .hover\:bg-slate-200:hover {
+      background-color: var(--color-slate-200);
     }
     .hover\:bg-white\/10:hover {
       background-color: color-mix(in srgb, #fff 10%, transparent);

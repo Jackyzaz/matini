@@ -113,7 +113,9 @@ def fill_llms(data):
         update_assess_link()
         return
     for l in llms:
-        llm_select <= html.OPTION(f"{l['name']} ({l['model_name']})", value=l["id"])
+        size = l.get("parameter_size_b")
+        size_text = f" · {size:g}B" if size else ""
+        llm_select <= html.OPTION(f"{l['name']} ({l['model_name']}){size_text}", value=l["id"])
     saved = ls_get(LS_LLM_KEY)
     if saved in state["llm_ids"]:
         llm_select.value = saved
