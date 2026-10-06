@@ -14,15 +14,15 @@
 
 ## 0. ภาพรวมสถาปัตยกรรม
 
-| ส่วน | ไฟล์ | หน้าที่ |
-|---|---|---|
-| Config | `api/core/config.py` | `MONGODB_URI`, `OLLAMA_BASE_URL`, `OLLAMA_TIMEOUT_S` |
-| Database | `models/` (Beanie) | collection `llms`, `conversations`, `assessments` |
-| Schemas | `schemas/` | schema ของ LLM, บทสนทนา, เกณฑ์ประเมิน/รายงาน/สถานะงาน |
-| LLM client | `api/services/local_llm.py` | เรียก Ollama `/api/chat` (แบบ sync สำหรับประเมิน, แบบ async stream สำหรับแชท) |
-| Assessment engine | `api/services/nist_rmf.py`, `api/services/assessment.py` | เกณฑ์ 12 ข้อ + งานประเมินเบื้องหลังพร้อมรายงานความคืบหน้า |
-| Routers | `api/routers/{llms,chat,assessment}.py` | `/api/llms`, `/api/conversations`, `/api/assessment` |
-| Web | `web/views/{chat,admin,assessment}.py` + `web/templates/` + `web/static/brython/` | หน้าแชท (`/`), หน้า Admin (`/admin/`), หน้าประเมิน (`/assessment/<llm_id>`) |
+| ส่วน              | ไฟล์                                                                              | หน้าที่                                                                      |
+| ----------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Config            | `api/core/config.py`                                                              | `MONGODB_URI`, `OLLAMA_BASE_URL`, `OLLAMA_TIMEOUT_S`                         |
+| Database          | `models/` (Beanie)                                                                | collection`llms`, `conversations`, `assessments`                             |
+| Schemas           | `schemas/`                                                                        | schema ของ LLM, บทสนทนา, เกณฑ์ประเมิน/รายงาน/สถานะงาน                        |
+| LLM client        | `api/services/local_llm.py`                                                       | เรียก Ollama`/api/chat` (แบบ sync สำหรับประเมิน, แบบ async stream สำหรับแชท) |
+| Assessment engine | `api/services/nist_rmf.py`, `api/services/assessment.py`                          | เกณฑ์ 12 ข้อ + งานประเมินเบื้องหลังพร้อมรายงานความคืบหน้า                    |
+| Routers           | `api/routers/{llms,chat,assessment}.py`                                           | `/api/llms`, `/api/conversations`, `/api/assessment`                         |
+| Web               | `web/views/{chat,admin,assessment}.py` + `web/templates/` + `web/static/brython/` | หน้าแชท (`/`), หน้า Admin (`/admin/`), หน้าประเมิน (`/assessment/<llm_id>`)  |
 
 ผลการประเมินและประวัติแชทเก็บใน **MongoDB** ส่วนสถานะของงานประเมินที่กำลังรันอยู่ (สำหรับ progress bar)
 เก็บใน memory ของ API process — ถ้ารีสตาร์ท API ระหว่างรัน งานนั้นจะหายและต้องกดรันใหม่
@@ -35,33 +35,43 @@
 
 1. ติดตั้ง Ollama: https://ollama.com/download (Linux/macOS/Windows รองรับหมด)
 2. ดึงโมเดลที่จะใช้ (แนะนำเริ่มจากโมเดลเล็กให้ POC เร็ว แล้วค่อยขยับขึ้น):
+
    ```bash
    ollama pull llama3.2:3b      # เร็ว เบา เหมาะกับ POC เริ่มต้น
    # หรือ
    ollama pull llama3.1         # ใหญ่กว่า คุณภาพดีกว่า ถ้าเครื่อง B แรงพอ
    ```
+
    > **ข้อควรระวังเชิงวิธีวิจัย**: การใช้โมเดลตัวเดียวกันเป็นทั้ง subject และ judge
    > มีความเสี่ยงเรื่อง self-evaluation bias (โมเดลตัดสินตัวเองอาจหย่อนยาน/ไม่คงเส้นคงวา)
    > สำหรับ POC ใช้ตัวเดียวกันได้เพื่อพิสูจน์ว่า pipeline ทำงานครบวงจร แต่สำหรับงานวิจัยจริง
    > ควรใช้โมเดลที่ต่างกัน (เช่น ดึงโมเดลที่ใหญ่/แข็งแรงกว่ามาเป็น judge โดยเฉพาะ) เช่น
+   >
    > ```bash
    > ollama pull qwen2.5:14b   # ใช้เป็น judge (เพิ่มเป็น LLM ในหน้า Admin แล้วเลือกเป็นผู้ตัดสินในหน้าประเมิน)
    > ```
+
 3. เปิดให้ Ollama รับ connection จากเครื่องอื่นในวง LAN (ค่าเริ่มต้น bind แค่ 127.0.0.1):
    - Linux (systemd): แก้ `/etc/systemd/system/ollama.service.d/override.conf`
+
      ```ini
      [Service]
      Environment="OLLAMA_HOST=0.0.0.0:11434"
      ```
+
      แล้ว `sudo systemctl daemon-reload && sudo systemctl restart ollama`
+
    - หรือรันตรง ๆ ชั่วคราว: `OLLAMA_HOST=0.0.0.0:11434 ollama serve`
    - macOS/Windows (Ollama app): ตั้งค่า environment variable `OLLAMA_HOST=0.0.0.0:11434` ก่อนเปิดแอป
+
 4. เปิด firewall พอร์ต `11434` ให้เครื่อง A เข้าถึงได้ (เช่น `sudo ufw allow 11434/tcp` บน Linux)
 5. หา IP ของเครื่อง B ในวง LAN (เช่น `ip addr` / `ifconfig`) — สมมติได้ `192.168.1.50`
 6. ทดสอบจากเครื่อง A ว่ายิงถึง:
+
    ```bash
    curl http://192.168.1.50:11434/api/tags
    ```
+
    ถ้าได้ JSON รายชื่อโมเดลกลับมา แปลว่าเชื่อมต่อได้แล้ว
 
 ---
@@ -87,6 +97,7 @@ OLLAMA_TIMEOUT_S=120
 > ระบบจะพยายามต่อ Ollama บนเครื่อง A เอง
 
 ต้องมี MongoDB รันอยู่ (Beanie ต้องใช้ Python < 3.14 — โปรเจกต์กำหนด `^3.12 || ^3.13`) เช่นรันชั่วคราวด้วย Docker:
+
 ```bash
 docker run -d --name matini-mongo -p 27017:27017 mongo:7
 ```
@@ -117,6 +128,7 @@ poetry run python -m matini.cmd.api
 # terminal 2: Flask frontend
 poetry run python -m matini.cmd.web
 ```
+
 (หรือ `./scripts/run-api` / `./scripts/run-web`)
 
 เปิดเบราว์เซอร์ไปที่ `http://127.0.0.1:8080`:
@@ -177,21 +189,21 @@ poetry run python -m matini.cmd.web
 
 ## 6. API endpoints (ดูที่ `http://127.0.0.1:8000/docs` ได้ด้วย)
 
-| Method | Path | หน้าที่ |
-|---|---|---|
-| GET | `/api/llms` | รายการ LLM ที่เปิดใช้งาน (`?status=all` รวมที่ปิดอยู่) |
-| POST | `/api/llms/create` | เพิ่ม LLM |
-| PUT | `/api/llms/update/{llm_id}` | แก้ไข/เปิด-ปิด LLM |
-| DELETE | `/api/llms/delete/{llm_id}` | ลบ (soft delete) |
-| POST | `/api/llms/{llm_id}/test` | ทดสอบการเชื่อมต่อ Ollama |
-| GET/POST | `/api/conversations`, `/api/conversations/create` | รายการ/สร้างบทสนทนา |
-| GET/DELETE | `/api/conversations/{id}`, `/api/conversations/delete/{id}` | อ่าน/ลบบทสนทนา |
-| POST | `/api/conversations/{id}/messages` | ส่งข้อความ — ตอบกลับเป็น NDJSON stream (`{"delta"}` ... `{"done"}` หรือ `{"error"}`) |
-| GET | `/api/assessment/criteria` | รายการเกณฑ์ประเมินทั้งหมด (static) |
-| POST | `/api/assessment/{llm_id}/run` | เริ่มการประเมินเบื้องหลัง (`llm_id` = โมเดลที่ถูกประเมิน, body ต้องมี `judge_llm_id`) — คืน `job_id` ทันที |
-| GET | `/api/assessment/jobs/{job_id}` | ความคืบหน้า: `status`, `step`, `total`, `label`, `report_id` |
-| GET | `/api/assessment/{llm_id}` | ผลล่าสุด |
-| GET | `/api/assessment/{llm_id}/history` | ประวัติทุกรอบ |
+| Method     | Path                                                        | หน้าที่                                                                                                    |
+| ---------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| GET        | `/api/llms`                                                 | รายการ LLM ที่เปิดใช้งาน (`?status=all` รวมที่ปิดอยู่)                                                     |
+| POST       | `/api/llms/create`                                          | เพิ่ม LLM                                                                                                  |
+| PUT        | `/api/llms/update/{llm_id}`                                 | แก้ไข/เปิด-ปิด LLM                                                                                         |
+| DELETE     | `/api/llms/delete/{llm_id}`                                 | ลบ (soft delete)                                                                                           |
+| POST       | `/api/llms/{llm_id}/test`                                   | ทดสอบการเชื่อมต่อ Ollama                                                                                   |
+| GET/POST   | `/api/conversations`, `/api/conversations/create`           | รายการ/สร้างบทสนทนา                                                                                        |
+| GET/DELETE | `/api/conversations/{id}`, `/api/conversations/delete/{id}` | อ่าน/ลบบทสนทนา                                                                                             |
+| POST       | `/api/conversations/{id}/messages`                          | ส่งข้อความ — ตอบกลับเป็น NDJSON stream (`{"delta"}` ... `{"done"}` หรือ `{"error"}`)                       |
+| GET        | `/api/assessment/criteria`                                  | รายการเกณฑ์ประเมินทั้งหมด (static)                                                                         |
+| POST       | `/api/assessment/{llm_id}/run`                              | เริ่มการประเมินเบื้องหลัง (`llm_id` = โมเดลที่ถูกประเมิน, body ต้องมี `judge_llm_id`) — คืน `job_id` ทันที |
+| GET        | `/api/assessment/jobs/{job_id}`                             | ความคืบหน้า:`status`, `step`, `total`, `label`, `report_id`                                                |
+| GET        | `/api/assessment/{llm_id}`                                  | ผลล่าสุด                                                                                                   |
+| GET        | `/api/assessment/{llm_id}/history`                          | ประวัติทุกรอบ                                                                                              |
 
 ---
 
